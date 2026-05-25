@@ -31,16 +31,28 @@ ANALYZE_JD_PROMPT = """
 EXTRACT_RESUME_PROMPT = """
 你是一个专业的 AI 简历分析助手。
 
-请从下面的简历文本中提取候选人的能力画像。
+请根据下面的 RAG 检索证据，提取候选人的能力画像。
 
 要求：
 1. 只输出 JSON
 2. 不要输出 Markdown
 3. 不要添加解释
-4. 不要脑补简历中没有的信息
-5. 每个技能尽量附带 evidence
+4. 不要脑补证据中没有的信息
+5. 每个技能必须附带 evidence
+6. evidence 必须来自提供的 RAG 检索证据
+7. 如果某类能力没有证据，返回空数组 []
+8. frontend/backend/ai/infra skills 必须来自技能证据或补充简历文本。
+9. education 可以来自背景证据。
+10. projects 可以来自技能证据或背景证据。
+11. 不要把 education 当成技能 evidence。
 
-简历文本：
+技能证据：
+{skill_evidence}
+
+背景证据：
+{background_evidence}
+
+补充简历文本：
 {resume_text}
 
 请严格按照以下 JSON 结构输出：
@@ -49,25 +61,25 @@ EXTRACT_RESUME_PROMPT = """
   "frontend_skills": [
     {{
       "skill": "技能名称",
-      "evidence": "简历中的证据"
+      "evidence": "证据原文"
     }}
   ],
   "backend_skills": [
     {{
       "skill": "技能名称",
-      "evidence": "简历中的证据"
+      "evidence": "证据原文"
     }}
   ],
   "ai_skills": [
     {{
       "skill": "技能名称",
-      "evidence": "简历中的证据"
+      "evidence": "证据原文"
     }}
   ],
   "infra_skills": [
     {{
       "skill": "技能名称",
-      "evidence": "简历中的证据"
+      "evidence": "证据原文"
     }}
   ],
   "projects": [
@@ -101,6 +113,9 @@ MATCH_JOB_PROMPT = """
 4. 不要脑补简历中没有的信息
 5. 所有匹配技能必须附带 evidence
 6. match_score 范围 0-100
+7. matched_skills 只能来自候选人能力画像中的明确 evidence
+8. 如果岗位要求某技能，但候选人能力画像中没有证据，必须放入 missing_skills
+9. risks 中要说明关键缺口
 
 岗位能力要求：
 {jd_analysis}
@@ -114,14 +129,14 @@ MATCH_JOB_PROMPT = """
   "match_score": 0,
   "matched_skills": [
     {{
-      "skill": "",
-      "evidence": ""
+      "skill": "匹配技能",
+      "evidence": "候选人能力画像中的证据"
     }}
   ],
-  "missing_skills": [],
-  "strengths": [],
-  "risks": [],
-  "summary": ""
+  "missing_skills": ["缺失技能"],
+  "strengths": ["候选人优势"],
+  "risks": ["候选人风险或不足"],
+  "summary": "整体匹配结论"
 }}
 """
 
@@ -211,4 +226,78 @@ GENERATE_COVER_LETTER_PROMPT = """
 
 匹配结果：
 {match_result}
+"""
+
+
+BUILD_RETRIEVAL_QUERIES_PROMPT = """
+你是一个 RAG 检索规划助手。
+
+请根据岗位 JD 分析结果，生成用于检索候选人简历/项目经历的查询计划。
+
+要求：
+1. 只输出 JSON
+2. 不要输出 Markdown
+3. 不要添加解释
+4. 每个 query 应该用于检索一个能力维度
+5. query 使用自然语言表达，适合向量检索
+6. keywords 使用关键词数组，适合 BM25 / Hybrid Search
+7. queries 数组长度最大为 5
+8. 除技能维度 query 外，必须生成一个 dimension 为 "background" 的 query，用于检索教育经历、个人背景、项目概述、整体经历、学历程度、毕业院校。
+9. background query 不参与技能匹配，只用于生成简历画像、求职自我介绍和 cover letter。
+
+岗位 JD 分析结果：
+{jd_analysis}
+
+请严格按照以下 JSON 结构输出：
+
+{{
+  "queries": [
+    {{
+      "dimension": "frontend",
+      "query": "寻找候选人是否具备 Vue 前端项目经验，包括页面开发、组件化和前后端交互。",
+      "keywords": ["Vue", "前端", "组件", "页面"]
+    }},
+    {{
+      "dimension": "background",
+      "query": "寻找候选人的教育经历、个人背景、项目概述和整体求职优势。",
+      "keywords": ["教育经历", "学历", "项目经历", "个人背景", "求职优势"]
+    }}
+  ]
+}}
+"""
+
+
+REFLECT_EVIDENCE_PROMPT = """
+你是一个 Agentic RAG 反思助手。
+
+请检查当前 RAG 检索结果是否足够支持后续简历能力分析。
+
+要求：
+1. 只输出 JSON
+2. 不要输出 Markdown
+3. 不要添加解释
+4. 如果某个检索维度没有有效 evidence，生成 retry query
+5. retry query 应该换一种表达方式，包含同义词或相关表达
+6. 最多生成 3 个 retry query
+7. 如果 evidence 已经足够，need_retry=false
+
+原始 query_plan：
+{query_plan}
+
+当前 skill_evidence：
+{skill_evidence}
+
+请严格按照以下 JSON 结构输出：
+
+{{
+  "need_retry": true,
+  "retry_queries": [
+    {{
+      "dimension": "ai_skills",
+      "reason": "未找到 Agent 相关证据，需要尝试 LangGraph、智能体、工具调用等关键词",
+      "retry_query": "寻找候选人是否具备智能体开发、LangGraph 工作流、工具调用或 Agent 项目经验。",
+      "keywords": ["智能体", "LangGraph", "工具调用", "Agent", "工作流"]
+    }}
+  ]
+}}
 """

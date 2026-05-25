@@ -20,6 +20,7 @@ app.add_middleware(
 
 class CareerAnalyzeRequest(BaseModel):
     session_id: str
+    user_id: str
     job_description: str
     resume_text: str
 
@@ -28,6 +29,7 @@ class CareerAnalyzeRequest(BaseModel):
 def analyze_career(request: CareerAnalyzeRequest):
     report = run_career_agent(
         session_id=request.session_id,
+        user_id=request.user_id,
         job_description=request.job_description,
         resume_text=request.resume_text,
     )

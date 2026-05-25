@@ -1,5 +1,12 @@
-from services.redis_service import redis_client
 import json
+import logging
+
+from redis.exceptions import RedisError
+
+from services.redis_service import REDIS_HOST, REDIS_PORT, redis_client
+
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryService:
@@ -16,29 +23,50 @@ class MemoryService:
         session_id: str,
         memory: dict
     ):
+        if redis_client is None:
+            logger.warning("Redis memory is disabled; skipping save.")
+            return
 
         key = self._build_key(session_id)
 
-        redis_client.lpush(
-            key,
-            json.dumps(memory, ensure_ascii=False)
-        )
-
-        # 只保留最近 5 条
-        redis_client.ltrim(key, 0, 4)
+        try:
+            redis_client.lpush(
+                key,
+                json.dumps(memory, ensure_ascii=False)
+            )
+            redis_client.ltrim(key, 0, 4)
+        except RedisError as exc:
+            logger.warning(
+                "Redis unavailable at %s:%s; skipping memory save: %s",
+                REDIS_HOST,
+                REDIS_PORT,
+                exc,
+            )
 
     def get_memories(
         self,
         session_id: str
     ):
+        if redis_client is None:
+            logger.warning("Redis memory is disabled; returning empty history.")
+            return []
 
         key = self._build_key(session_id)
 
-        memories = redis_client.lrange(
-            key,
-            0,
-            -1
-        )
+        try:
+            memories = redis_client.lrange(
+                key,
+                0,
+                -1
+            )
+        except RedisError as exc:
+            logger.warning(
+                "Redis unavailable at %s:%s; returning empty history: %s",
+                REDIS_HOST,
+                REDIS_PORT,
+                exc,
+            )
+            return []
 
         return [
             json.loads(item)

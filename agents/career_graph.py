@@ -14,11 +14,17 @@ from prompts.career_prompts import (
     GENERATE_LEARNING_PLAN_PROMPT,
     GENERATE_INTERVIEW_TIPS_PROMPT,
     GENERATE_COVER_LETTER_PROMPT,
+    BUILD_RETRIEVAL_QUERIES_PROMPT,
+    REFLECT_EVIDENCE_PROMPT,
 )
 from schemas.jd_schema import JDAnalysis
 from schemas.resume_schema import ResumeProfile
 from schemas.match_schema import MatchResult
+from schemas.query_schema import QueryPlan
+from schemas.reflection_schema import ReflectionResult
 from services.memory_service import MemoryService
+
+from tools.rag_evidence_tool import retrieve_evidence_from_rag
 
 memory_service = MemoryService()
 
@@ -29,6 +35,7 @@ load_dotenv()
 # 1. 定义 Agent 的 State
 # ============================================================
 class CareerAgentState(TypedDict):
+    user_id: str
     session_id: str
     job_description: str
     resume_text: str
@@ -40,6 +47,16 @@ class CareerAgentState(TypedDict):
     cover_letter: str
     memories: list[dict[str, Any]]
     final_report: str
+    skill_evidence: list[dict]
+    background_evidence: list[dict]
+    rag_evidence: list[dict[str, Any]]
+    query_plan: dict[str, Any]
+
+    reflection_result: dict[str, Any]
+    retry_evidence: list[dict[str, Any]]
+    retry_count: int
+    max_retry: int
+    retry_added_count: int
 
 
 json_llm = ChatOpenAI(
@@ -58,8 +75,170 @@ text_llm = ChatOpenAI(
 )
 
 
+def retrieve_resume_evidence(state: CareerAgentState):
+
+    all_evidence = []
+    skill_evidence = []
+    background_evidence = []
+    seen_skill = set()
+    seen_background = set()
+    queries = state.get("query_plan", {}).get("queries", [])
+
+    for item in queries:
+        dimension = item.get("dimension", "")
+        semantic_query = item.get("query", "")
+        keywords = item.get("keywords", [])
+
+        keyword_query = " ".join(keywords)
+
+        final_query = f"{semantic_query}\n关键词：{keyword_query}"
+
+        evidence_list = retrieve_evidence_from_rag(
+            user_id=state["user_id"], query=final_query
+        )
+
+        for evidence in evidence_list:
+            content = evidence.get("content", "")
+
+            if dimension == "background":
+                if content in seen_background:
+                    continue
+                seen_background.add(content)
+                all_evidence.append(evidence)
+                background_evidence.append(evidence)
+            else:
+                if content in seen_skill:
+                    continue
+                seen_skill.add(content)
+                all_evidence.append(evidence)
+                skill_evidence.append(evidence)
+
+    print("\n====== skill_evidence ======")
+    print(skill_evidence)
+
+    print("\n====== background_evidence ======")
+    print(background_evidence)
+    print("\n====== retrieve_resume_evidence: evidence ======")
+    print(all_evidence)
+
+    return {
+        "rag_evidence": all_evidence,
+        "skill_evidence": skill_evidence,
+        "background_evidence": background_evidence,
+    }
+
+
+def reflect_evidence(state: CareerAgentState):
+    prompt = REFLECT_EVIDENCE_PROMPT.format(
+        query_plan=json.dumps(
+            state.get("query_plan", {}), ensure_ascii=False, indent=2
+        ),
+        skill_evidence=json.dumps(
+            state.get("skill_evidence", []), ensure_ascii=False, indent=2
+        ),
+    )
+
+    response = json_llm.invoke(prompt)
+
+    try:
+        raw_dict = json.loads(response.content)
+        reflection_result = ReflectionResult.model_validate(raw_dict).model_dump()
+    except (json.JSONDecodeError, ValidationError) as e:
+        print("\n====== reflect_evidence: 解析失败 ======")
+        print(e)
+        print(response.content)
+
+        reflection_result = {"need_retry": False, "retry_queries": []}
+
+    print("\n====== reflect_evidence: 输出 reflection_result ======")
+    print(reflection_result)
+
+    return {"reflection_result": reflection_result}
+
+
+def retry_retrieve_evidence(state: CareerAgentState):
+    reflection = state.get("reflection_result", {})
+
+    if not reflection.get("need_retry"):
+        return {"retry_evidence": []}
+
+    # 记录重试次数，避免死循环
+    retry_count = state.get("retry_count", 0) + 1
+    retry_evidence = []
+    seen_contents = {item.get("content", "") for item in state.get("rag_evidence", [])}
+
+    for item in reflection.get("retry_queries", []):
+        dimension = item.get("dimension", "")
+        retry_query = item.get("retry_query", "")
+        keywords = item.get("keywords", [])
+
+        final_query = f"{retry_query}\n关键词：{' '.join(keywords)}"
+
+        evidence_list = retrieve_evidence_from_rag(
+            user_id=state["user_id"], query=final_query
+        )
+
+        for evidence in evidence_list:
+            content = evidence.get("content", "")
+            if not content or content in seen_contents:
+                continue
+
+            seen_contents.add(content)
+
+            evidence["retrieval_dimension"] = dimension
+            evidence["retrieval_query"] = final_query
+            evidence["retrieval_type"] = "retry"
+
+            retry_evidence.append(evidence)
+
+    print("\n====== retry_retrieve_evidence: 输出 retry_evidence ======")
+    print(retry_evidence)
+
+    print(
+        f"\n====== retry_retrieve_evidence: 重试次数 ====== {retry_count} ======  新增证据数 ====== {len(retry_evidence)} ======"
+    )
+    return {
+        "retry_count": retry_count,
+        "retry_added_count": len(retry_evidence),
+        "retry_evidence": retry_evidence,
+        "rag_evidence": state.get("rag_evidence", []) + retry_evidence,
+        "skill_evidence": state.get("skill_evidence", []) + retry_evidence,
+    }
+
+
+def filter_matched_skills_without_evidence(match_result: dict):
+    match_result["matched_skills"] = [
+        item for item in match_result.get("matched_skills", []) if item.get("evidence")
+    ]
+    return match_result
+
+
 # 废弃，deepseek 不支持 Pydantic 对象
 # structured_jd_llm = llm.with_structured_output(JDAnalysis)
+
+
+def build_retrieval_queries(state: CareerAgentState):
+
+    prompt = BUILD_RETRIEVAL_QUERIES_PROMPT.format(
+        jd_analysis=json.dumps(state["jd_analysis"], ensure_ascii=False, indent=2)
+    )
+
+    response = json_llm.invoke(prompt)
+
+    try:
+        raw_dict = json.loads(response.content)
+        query_plan = QueryPlan.model_validate(raw_dict).model_dump()
+    except (json.JSONDecodeError, ValidationError) as e:
+        print("\n====== build_retrieval_queries: 解析失败 ======")
+        print(e)
+        print(response.content)
+
+        query_plan = {"queries": []}
+
+    print("\n====== build_retrieval_queries: 输出 query_plan ======")
+    print(query_plan)
+
+    return {"query_plan": query_plan}
 
 
 def load_memory(state: CareerAgentState):
@@ -125,7 +304,15 @@ def analyze_jd(state: CareerAgentState):
 
 def extract_resume_profile(state: CareerAgentState):
 
-    prompt = EXTRACT_RESUME_PROMPT.format(resume_text=state["resume_text"])
+    prompt = EXTRACT_RESUME_PROMPT.format(
+        skill_evidence=json.dumps(
+            state.get("skill_evidence", []), ensure_ascii=False, indent=2
+        ),
+        background_evidence=json.dumps(
+            state.get("background_evidence", []), ensure_ascii=False, indent=2
+        ),
+        resume_text=state.get("resume_text", ""),
+    )
 
     response = json_llm.invoke(prompt)
 
@@ -164,7 +351,8 @@ def match_job(state: CareerAgentState):
 
     try:
         raw_dict = json.loads(response.content)
-        match_result = MatchResult.model_validate(raw_dict)
+        match_result = MatchResult.model_validate(raw_dict).model_dump()
+        match_result = filter_matched_skills_without_evidence(match_result)
     except (json.JSONDecodeError, ValidationError) as e:
         print("\n====== match_job: 解析失败 ======")
         print(e)
@@ -182,7 +370,7 @@ def match_job(state: CareerAgentState):
     print("\n====== match_job: 输出 match_result ======")
     print(match_result)
 
-    return {"match_result": match_result.model_dump()}
+    return {"match_result": match_result}
 
 
 def generate_learning_plan(state: CareerAgentState):
@@ -196,11 +384,12 @@ def generate_learning_plan(state: CareerAgentState):
         memories=json.dumps(state["memories"], ensure_ascii=False),
     )
 
-    response = text_llm.invoke(prompt)
+    # response = text_llm.invoke(prompt)
 
-    print("\n====== generate_learning_plan: 输出 ======")
-    print(response)
-    return {"learning_plan": response.content}
+    # print("\n====== generate_learning_plan: 输出 ======")
+    # print(response)
+    # return {"learning_plan": response.content}
+    return {"learning_plan": ""}
 
 
 def generate_interview_tips(state: CareerAgentState):
@@ -228,6 +417,15 @@ def route_by_score(state: CareerAgentState):
         return "generate_interview_tips"
 
     return "generate_learning_plan"
+
+
+def route_after_reflection(state: CareerAgentState):
+    reflection = state.get("reflection_result", {})
+
+    if reflection.get("need_retry"):
+        return "retry_retrieve_evidence"
+
+    return "extract_resume_profile"
 
 
 def generate_cover_letter(state: CareerAgentState):
@@ -277,10 +475,7 @@ def generate_report(state: CareerAgentState):
 
 """
 
-    for skill in state["match_result"].get(
-        "matched_skills",
-        []
-    ):
+    for skill in state["match_result"].get("matched_skills", []):
 
         report += f"""
 - {skill["skill"]}
@@ -294,10 +489,7 @@ def generate_report(state: CareerAgentState):
 
 """
 
-    for skill in state["match_result"].get(
-        "missing_skills",
-        []
-    ):
+    for skill in state["match_result"].get("missing_skills", []):
 
         report += f"- {skill}\n"
 
@@ -308,10 +500,7 @@ def generate_report(state: CareerAgentState):
 
 """
 
-    for item in state["match_result"].get(
-        "strengths",
-        []
-    ):
+    for item in state["match_result"].get("strengths", []):
 
         report += f"- {item}\n"
 
@@ -322,10 +511,7 @@ def generate_report(state: CareerAgentState):
 
 """
 
-    for item in state["match_result"].get(
-        "risks",
-        []
-    ):
+    for item in state["match_result"].get("risks", []):
 
         report += f"- {item}\n"
 
@@ -357,9 +543,7 @@ def generate_report(state: CareerAgentState):
 {state["cover_letter"]}
 """
 
-    return {
-        "final_report": report
-    }
+    return {"final_report": report}
 
 
 # ============================================================
@@ -388,10 +572,21 @@ def build_career_graph():
     graph.add_node("generate_learning_plan", generate_learning_plan)
     graph.add_node("generate_interview_tips", generate_interview_tips)
     graph.add_node("generate_cover_letter", generate_cover_letter)
+    graph.add_node("build_retrieval_queries", build_retrieval_queries)
+    graph.add_node("retrieve_resume_evidence", retrieve_resume_evidence)
+
+    graph.add_node("reflect_evidence", reflect_evidence)
+    graph.add_node("retry_retrieve_evidence", retry_retrieve_evidence)
 
     graph.add_edge(START, "load_memory")
     graph.add_edge("load_memory", "analyze_jd")
-    graph.add_edge("analyze_jd", "extract_resume_profile")
+    graph.add_edge("analyze_jd", "build_retrieval_queries")
+    graph.add_edge("build_retrieval_queries", "retrieve_resume_evidence")
+
+    graph.add_edge("retrieve_resume_evidence", "reflect_evidence")
+    graph.add_conditional_edges("reflect_evidence", route_after_reflection)
+    graph.add_edge("retry_retrieve_evidence", "extract_resume_profile")
+
     graph.add_edge("extract_resume_profile", "match_job")
     graph.add_conditional_edges("match_job", route_by_score)
     graph.add_edge("generate_learning_plan", "generate_cover_letter")
@@ -419,9 +614,12 @@ career_graph = build_career_graph()
 #   2. 执行 graph
 #   3. 返回 final_report
 # ============================================================
-def run_career_agent(session_id: str, job_description: str, resume_text: str):
+def run_career_agent(
+    session_id: str, user_id: str, job_description: str, resume_text: str
+):
     result = career_graph.invoke(
         {
+            "user_id": user_id,
             "session_id": session_id,
             "job_description": job_description,
             "resume_text": resume_text,
@@ -433,6 +631,15 @@ def run_career_agent(session_id: str, job_description: str, resume_text: str):
             "cover_letter": "",
             "memories": [],
             "final_report": "",
+            "rag_evidence": [],
+            "skill_evidence": [],
+            "background_evidence": [],
+            "query_plan": {},
+            "reflection_result": {},
+            "retry_evidence": [],
+            "retry_count": 0,
+            "max_retry": 1,
+            "retry_added_count": 0,
         }
     )
 
