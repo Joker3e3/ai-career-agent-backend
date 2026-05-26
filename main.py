@@ -1,8 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from dotenv import load_dotenv
 
-from agents.career_graph import run_career_agent
+load_dotenv()
+
+from agents.career_graph import run_career_agent, run_confirm_workflow
+from schemas.confirm_schema import ConfirmRequest
 
 app = FastAPI()
 
@@ -27,14 +31,23 @@ class CareerAnalyzeRequest(BaseModel):
 
 @app.post("/career_agent/analyze")
 def analyze_career(request: CareerAnalyzeRequest):
-    report = run_career_agent(
+
+    return run_career_agent(
         session_id=request.session_id,
         user_id=request.user_id,
         job_description=request.job_description,
         resume_text=request.resume_text,
     )
 
-    return {"report": report}
+
+@app.post("/career_agent/confirm")
+async def confirm_action(request: ConfirmRequest):
+
+    return run_confirm_workflow(
+        workflow_id=request.workflow_id,
+        confirmation_id=request.confirmation_id,
+        human_action=request.action,
+    )
 
 
 if __name__ == "__main__":

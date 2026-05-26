@@ -2,7 +2,7 @@ import os
 from typing import TypedDict, Any
 
 import json
-from dotenv import load_dotenv
+import uuid
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
 from pydantic import ValidationError
@@ -23,16 +23,16 @@ from schemas.match_schema import MatchResult
 from schemas.query_schema import QueryPlan
 from schemas.reflection_schema import ReflectionResult
 from services.memory_service import MemoryService
+from services.workflow_state_service import WorkflowStateService
+from services.confirmation_service import ConfirmationService
 
 from tools.rag_evidence_tool import retrieve_evidence_from_rag
 
 memory_service = MemoryService()
+workflow_state_service = WorkflowStateService()
+confirmation_service = ConfirmationService()
 
-load_dotenv()
 
-
-# ============================================================
-# 1. 定义 Agent 的 State
 # ============================================================
 class CareerAgentState(TypedDict):
     user_id: str
@@ -57,6 +57,14 @@ class CareerAgentState(TypedDict):
     retry_count: int
     max_retry: int
     retry_added_count: int
+
+    workflow_id: str
+    workflow_status: str
+    current_node: str
+    confirmation_id: str
+    human_action: str
+    confirmation_status: str
+    confirmation_message: str
 
 
 json_llm = ChatOpenAI(
@@ -125,6 +133,7 @@ def retrieve_resume_evidence(state: CareerAgentState):
         "rag_evidence": all_evidence,
         "skill_evidence": skill_evidence,
         "background_evidence": background_evidence,
+        "current_node": "retrieve_resume_evidence",
     }
 
 
@@ -153,7 +162,7 @@ def reflect_evidence(state: CareerAgentState):
     print("\n====== reflect_evidence: 输出 reflection_result ======")
     print(reflection_result)
 
-    return {"reflection_result": reflection_result}
+    return {"reflection_result": reflection_result, "current_node": "reflect_evidence"}
 
 
 def retry_retrieve_evidence(state: CareerAgentState):
@@ -203,6 +212,38 @@ def retry_retrieve_evidence(state: CareerAgentState):
         "retry_evidence": retry_evidence,
         "rag_evidence": state.get("rag_evidence", []) + retry_evidence,
         "skill_evidence": state.get("skill_evidence", []) + retry_evidence,
+        "current_node": "retry_retrieve_evidence",
+    }
+
+
+def create_confirmation(state: CareerAgentState):
+    confirmation_id = f"confirm_{uuid.uuid4()}"
+    confirmation_service.save_confirmation(
+        confirmation_id=confirmation_id,
+        data={
+            "confirmation_id": confirmation_id,
+            "workflow_id": state["workflow_id"],
+            "status": "pending",
+            "action_type": "cover_letter_approval",
+            "user_action": "",
+        },
+    )
+
+    updated_state = {
+        **state,
+        "confirmation_id": confirmation_id,
+        "workflow_status": "waiting_human_confirmation",
+        "current_node": "create_confirmation",
+    }
+
+    workflow_state_service.save_state(
+        workflow_id=state["workflow_id"], state=updated_state
+    )
+
+    return {
+        "confirmation_id": confirmation_id,
+        "workflow_status": "waiting_human_confirmation",
+        "current_node": "create_confirmation",
     }
 
 
@@ -238,7 +279,7 @@ def build_retrieval_queries(state: CareerAgentState):
     print("\n====== build_retrieval_queries: 输出 query_plan ======")
     print(query_plan)
 
-    return {"query_plan": query_plan}
+    return {"query_plan": query_plan, "current_node": "build_retrieval_queries"}
 
 
 def load_memory(state: CareerAgentState):
@@ -249,7 +290,7 @@ def load_memory(state: CareerAgentState):
     print("\n====== load_memory: 历史 memories ======")
     print(memories)
 
-    return {"memories": memories}
+    return {"memories": memories, "current_node": "load_memory"}
 
 
 def save_memory(state: CareerAgentState):
@@ -268,7 +309,7 @@ def save_memory(state: CareerAgentState):
 
     print(memory)
 
-    return {}
+    return {"current_node": "save_memory"}
 
 
 def analyze_jd(state: CareerAgentState):
@@ -299,7 +340,7 @@ def analyze_jd(state: CareerAgentState):
     print("\n====== analyze_jd: 输出 jd_analysis ======")
     print(jd_analysis)
 
-    return {"jd_analysis": jd_analysis.model_dump()}
+    return {"jd_analysis": jd_analysis.model_dump(), "current_node": "analyze_jd"}
 
 
 def extract_resume_profile(state: CareerAgentState):
@@ -337,7 +378,10 @@ def extract_resume_profile(state: CareerAgentState):
     print("\n====== extract_resume_profile: 输出 resume_profile ======")
     print(resume_profile)
 
-    return {"resume_profile": resume_profile.model_dump()}
+    return {
+        "resume_profile": resume_profile.model_dump(),
+        "current_node": "extract_resume_profile",
+    }
 
 
 def match_job(state: CareerAgentState):
@@ -370,7 +414,7 @@ def match_job(state: CareerAgentState):
     print("\n====== match_job: 输出 match_result ======")
     print(match_result)
 
-    return {"match_result": match_result}
+    return {"match_result": match_result, "current_node": "match_job"}
 
 
 def generate_learning_plan(state: CareerAgentState):
@@ -389,7 +433,7 @@ def generate_learning_plan(state: CareerAgentState):
     # print("\n====== generate_learning_plan: 输出 ======")
     # print(response)
     # return {"learning_plan": response.content}
-    return {"learning_plan": ""}
+    return {"learning_plan": "", "current_node": "generate_learning_plan"}
 
 
 def generate_interview_tips(state: CareerAgentState):
@@ -403,7 +447,10 @@ def generate_interview_tips(state: CareerAgentState):
 
     response = text_llm.invoke(prompt)
 
-    return {"interview_tips": response.content}
+    return {
+        "interview_tips": response.content,
+        "current_node": "generate_interview_tips",
+    }
 
 
 # 路由函数
@@ -437,23 +484,9 @@ def generate_cover_letter(state: CareerAgentState):
 
     response = text_llm.invoke(prompt)
 
-    return {"cover_letter": response.content}
+    return {"cover_letter": response.content, "current_node": "generate_cover_letter"}
 
 
-# ============================================================
-# 4. Node 2：生成最终报告
-# ============================================================
-# 这个 node 不再调用 LLM。
-# 它只是把上一步得到的 jd_analysis 包装成报告。
-#
-# 它读取：
-#   state["jd_analysis"]
-#
-# 然后生成：
-#   final_report
-#
-# 最后返回：
-#   {"final_report": final_report}
 # ============================================================
 def generate_report(state: CareerAgentState):
     report = f"""
@@ -543,22 +576,39 @@ def generate_report(state: CareerAgentState):
 {state["cover_letter"]}
 """
 
-    return {"final_report": report}
+    return {"final_report": report, "current_node": "generate_report"}
 
 
-# ============================================================
-# 5. 构建 LangGraph 工作流
-# ============================================================
-# 这里是真正的 graph 定义部分。
-#
-# StateGraph(CareerAgentState)
-# 表示：
-#   这个图运行时使用 CareerAgentState 作为共享状态。
-# add_node：
-#   注册节点。
-# add_edge：
-#   定义节点之间的执行顺序。
-# ============================================================
+def confirm_node(state: CareerAgentState):
+
+    action = state.get("human_action", "")
+
+    if action == "approve":
+        confirmation_status = "approved"
+        confirmation_message = "用户已确认使用该投递草稿。当前版本不执行真实投递。"
+    elif action == "revise":
+        confirmation_status = "revise_required"
+        confirmation_message = "用户要求修改投递草稿。"
+    elif action == "reject":
+        confirmation_status = "rejected"
+        confirmation_message = "用户暂不使用该投递草稿。"
+    else:
+        confirmation_status = "invalid"
+        confirmation_message = "未知确认动作。"
+
+    print(
+        f"\n====== confirm_node: 输出 confirmation_status ======{confirmation_status} =========== confirmation_message:{confirmation_message}"
+    )
+    return {
+        "human_action": action,
+        "confirmation_status": confirmation_status,
+        "confirmation_message": confirmation_message,
+        "workflow_status": "completed",
+        "current_node": "confirm_node",
+    }
+
+
+# ===========================================================
 def build_career_graph():
     graph = StateGraph(CareerAgentState)
 
@@ -577,6 +627,7 @@ def build_career_graph():
 
     graph.add_node("reflect_evidence", reflect_evidence)
     graph.add_node("retry_retrieve_evidence", retry_retrieve_evidence)
+    graph.add_node("create_confirmation", create_confirmation)
 
     graph.add_edge(START, "load_memory")
     graph.add_edge("load_memory", "analyze_jd")
@@ -593,7 +644,8 @@ def build_career_graph():
     graph.add_edge("generate_interview_tips", "generate_cover_letter")
     graph.add_edge("generate_cover_letter", "generate_report")
     graph.add_edge("generate_report", "save_memory")
-    graph.add_edge("save_memory", END)
+    graph.add_edge("save_memory", "create_confirmation")
+    graph.add_edge("create_confirmation", END)
 
     return graph.compile()
 
@@ -601,18 +653,22 @@ def build_career_graph():
 career_graph = build_career_graph()
 
 
+def build_confirm_graph():
+    confirm_graph = StateGraph(CareerAgentState)
+
+    confirm_graph.add_node("confirm_node", confirm_node)
+
+    confirm_graph.add_edge(START, "confirm_node")
+    confirm_graph.add_edge("confirm_node", END)
+
+    return confirm_graph.compile()
+
+
+confirm_graph = build_confirm_graph()
+
+
 # ============================================================
 # 7. 对外暴露一个简单函数
-# ============================================================
-# main.py 不需要知道 LangGraph 的细节。
-#
-# main.py 只需要调用：
-#   run_career_agent(job_description)
-#
-# 这个函数内部会：
-#   1. 初始化 state
-#   2. 执行 graph
-#   3. 返回 final_report
 # ============================================================
 def run_career_agent(
     session_id: str, user_id: str, job_description: str, resume_text: str
@@ -640,7 +696,65 @@ def run_career_agent(
             "retry_count": 0,
             "max_retry": 1,
             "retry_added_count": 0,
+            "workflow_id": f"workflow_{uuid.uuid4()}",
+            "workflow_status": "running",
+            "current_node": "",
+            "confirmation_id": "",
+            "human_action": "",
+            "confirmation_status": "",
+            "confirmation_message": "",
         }
     )
 
-    return result["final_report"]
+    return {
+        "workflow_id": result["workflow_id"],
+        "confirmation_id": result["confirmation_id"],
+        "workflow_status": result["workflow_status"],
+        "report": result["final_report"],
+    }
+
+
+def run_confirm_workflow(workflow_id: str, confirmation_id: str, human_action: str):
+    saved_state = workflow_state_service.get_state(workflow_id)
+
+    if not saved_state:
+        return {"success": False, "message": "workflow 不存在"}
+
+    confirmation = confirmation_service.get_confirmation(confirmation_id)
+
+    if not confirmation:
+        return {"success": False, "message": "confirmation 不存在或已过期"}
+
+    if confirmation.get("workflow_id") != workflow_id:
+        return {"success": False, "message": "confirmation 不属于该 workflow"}
+
+    if confirmation.get("status") != "pending":
+        return {
+            "success": False,
+            "message": "该 confirmation 已处理，不能重复确认",
+            "confirmation_status": confirmation.get("status"),
+        }
+
+    saved_state["human_action"] = human_action
+
+    result = confirm_graph.invoke(saved_state)
+    confirmation_service.update_confirmation(
+        confirmation_id=confirmation_id,
+        updates={
+            "status": result["confirmation_status"],
+            "user_action": human_action,
+            "workflow_status": result["workflow_status"],
+            "message": result.get("confirmation_message", ""),
+        },
+    )
+
+    workflow_state_service.update_state(workflow_id=workflow_id, updates=result)
+
+    return {
+        "success": True,
+        "workflow_id": workflow_id,
+        "confirmation_id": confirmation_id,
+        "confirmation_status": result["confirmation_status"],
+        "confirmation_message": result.get("confirmation_message", ""),
+        "workflow_status": result["workflow_status"],
+    }

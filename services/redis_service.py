@@ -3,12 +3,8 @@ import logging
 
 import redis
 from redis.backoff import NoBackoff
-from dotenv import load_dotenv
 from redis.exceptions import RedisError
 from redis.retry import Retry
-
-
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 
