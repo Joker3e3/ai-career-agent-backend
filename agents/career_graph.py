@@ -28,6 +28,18 @@ from services.confirmation_service import ConfirmationService
 
 from tools.rag_evidence_tool import retrieve_evidence_from_rag
 
+from app.database.repositories.agent_run_repository import (
+    create_agent_run,
+    get_agent_run_by_workflow_id,
+    update_agent_run,
+)
+from app.database.repositories.human_confirmation_repository import (
+    create_human_confirmation,
+    update_human_confirmation,
+)
+
+from app.constants.workflow_status import ConfirmationStatus, WorkflowStatus
+
 memory_service = MemoryService()
 workflow_state_service = WorkflowStateService()
 confirmation_service = ConfirmationService()
@@ -238,6 +250,21 @@ def create_confirmation(state: CareerAgentState):
 
     workflow_state_service.save_state(
         workflow_id=state["workflow_id"], state=updated_state
+    )
+
+    create_agent_run(
+        workflow_id=state["workflow_id"],
+        user_id=state["user_id"],
+        status=WorkflowStatus.WAITING_HUMAN_CONFIRMATION.value,
+        jd_text=state["job_description"],
+        final_report=state["final_report"],
+    )
+
+    create_human_confirmation(
+        confirmation_id=confirmation_id,
+        workflow_id=state["workflow_id"],
+        action_type="cover_letter_approval",
+        status=ConfirmationStatus.PENDING.value,
     )
 
     return {
@@ -738,6 +765,8 @@ def run_confirm_workflow(workflow_id: str, confirmation_id: str, human_action: s
     saved_state["human_action"] = human_action
 
     result = confirm_graph.invoke(saved_state)
+
+    # 修改Redis内存
     confirmation_service.update_confirmation(
         confirmation_id=confirmation_id,
         updates={
@@ -749,6 +778,19 @@ def run_confirm_workflow(workflow_id: str, confirmation_id: str, human_action: s
     )
 
     workflow_state_service.update_state(workflow_id=workflow_id, updates=result)
+
+    # 改PostSQL
+    update_human_confirmation(
+        confirmation_id=confirmation_id,
+        status=result["confirmation_status"],
+        user_action=human_action,
+        message=result.get("confirmation_message", ""),
+    )
+
+    update_agent_run(
+        workflow_id=workflow_id,
+        status=WorkflowStatus.COMPLETED.value,
+    )
 
     return {
         "success": True,

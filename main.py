@@ -46,7 +46,7 @@ async def confirm_action(request: ConfirmRequest):
     return run_confirm_workflow(
         workflow_id=request.workflow_id,
         confirmation_id=request.confirmation_id,
-        human_action=request.action,
+        human_action=request.action.value,
     )
 
 
