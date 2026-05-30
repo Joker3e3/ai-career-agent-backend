@@ -5,8 +5,10 @@ from app.database.models.human_confirmation import HumanConfirmation
 def create_human_confirmation(
     confirmation_id: str,
     workflow_id: str,
+    actor_id: str,
     action_type: str,
     status: str,
+    payload_snapshot: str = "",
     user_action: str = "",
     message: str = "",
 ):
@@ -16,9 +18,11 @@ def create_human_confirmation(
         confirmation = HumanConfirmation(
             confirmation_id=confirmation_id,
             workflow_id=workflow_id,
+            actor_id=actor_id,
             action_type=action_type,
             status=status,
             user_action=user_action,
+            payload_snapshot=payload_snapshot,
             message=message,
         )
 

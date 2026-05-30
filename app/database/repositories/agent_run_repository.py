@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from app.database.database import SessionLocal
 from app.database.models.agent_run import AgentRun
 
@@ -5,9 +7,13 @@ from app.database.models.agent_run import AgentRun
 def create_agent_run(
     workflow_id: str,
     user_id: str,
+    run_type: str,
     status: str,
+    input_summary: str,
     jd_text: str,
+    match_score: int | None,
     final_report: str,
+    started_at: datetime | None = None,
 ):
     db = SessionLocal()
 
@@ -15,9 +21,13 @@ def create_agent_run(
         agent_run = AgentRun(
             workflow_id=workflow_id,
             user_id=user_id,
+            run_type=run_type,
             status=status,
+            input_summary=input_summary,
             jd_text=jd_text,
+            match_score=match_score,
             final_report=final_report,
+            started_at=started_at,
         )
 
         db.add(agent_run)
@@ -28,7 +38,6 @@ def create_agent_run(
 
     finally:
         db.close()
-
 
 def get_agent_run_by_workflow_id(
     workflow_id: str,

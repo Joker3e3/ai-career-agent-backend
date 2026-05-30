@@ -22,7 +22,7 @@ from schemas.resume_schema import ResumeProfile
 from schemas.match_schema import MatchResult
 from schemas.query_schema import QueryPlan
 from schemas.reflection_schema import ReflectionResult
-from services.memory_service import MemoryService
+from services.session_memory_service import SessionMemoryService
 from services.workflow_state_service import WorkflowStateService
 from services.confirmation_service import ConfirmationService
 
@@ -39,14 +39,17 @@ from app.database.repositories.human_confirmation_repository import (
 )
 
 from app.constants.workflow_status import ConfirmationStatus, WorkflowStatus
+from app.utils.time import now_utc8
 
-memory_service = MemoryService()
+from agents.career.state_policy import build_checkpoint_state
+
+session_memory_service = SessionMemoryService()
 workflow_state_service = WorkflowStateService()
 confirmation_service = ConfirmationService()
 
 
 # ============================================================
-class CareerAgentState(TypedDict):
+class CareerAgentState(TypedDict, total=False):
     user_id: str
     session_id: str
     job_description: str
@@ -230,6 +233,7 @@ def retry_retrieve_evidence(state: CareerAgentState):
 
 def create_confirmation(state: CareerAgentState):
     confirmation_id = f"confirm_{uuid.uuid4()}"
+    match_score = state.get("match_result", {}).get("match_score")
     confirmation_service.save_confirmation(
         confirmation_id=confirmation_id,
         data={
@@ -248,23 +252,36 @@ def create_confirmation(state: CareerAgentState):
         "current_node": "create_confirmation",
     }
 
+    full_state_json = json.dumps(updated_state, ensure_ascii=False)
+    checkpoint_state = build_checkpoint_state(updated_state)
+    checkpoint_json = json.dumps(checkpoint_state, ensure_ascii=False)
+
+    print("full_state size:", len(full_state_json))
+    print("checkpoint_state size:", len(checkpoint_json))
+
     workflow_state_service.save_state(
-        workflow_id=state["workflow_id"], state=updated_state
+        workflow_id=state["workflow_id"], state=checkpoint_state
     )
 
     create_agent_run(
         workflow_id=state["workflow_id"],
         user_id=state["user_id"],
+        run_type="career_analysis",
         status=WorkflowStatus.WAITING_HUMAN_CONFIRMATION.value,
+        input_summary=state["job_description"][:200],
         jd_text=state["job_description"],
+        match_score=match_score,
         final_report=state["final_report"],
+        started_at=now_utc8(),
     )
 
     create_human_confirmation(
         confirmation_id=confirmation_id,
         workflow_id=state["workflow_id"],
+        actor_id=state["user_id"],
         action_type="cover_letter_approval",
         status=ConfirmationStatus.PENDING.value,
+        payload_snapshot=state.get("cover_letter", ""),
     )
 
     return {
@@ -310,9 +327,12 @@ def build_retrieval_queries(state: CareerAgentState):
 
 
 def load_memory(state: CareerAgentState):
+    user_id = state["user_id"]
     session_id = state["session_id"]
 
-    memories = memory_service.get_memories(session_id)
+    memories = session_memory_service.get_memories(
+        user_id=user_id, session_id=session_id
+    )
 
     print("\n====== load_memory: 历史 memories ======")
     print(memories)
@@ -332,7 +352,9 @@ def save_memory(state: CareerAgentState):
         "summary": match.get("summary", ""),
     }
 
-    memory_service.save_memory(session_id=state["session_id"], memory=memory)
+    session_memory_service.save_memory(
+        user_id=state["user_id"], session_id=state["session_id"], memory=memory
+    )
 
     print(memory)
 
@@ -790,6 +812,7 @@ def run_confirm_workflow(workflow_id: str, confirmation_id: str, human_action: s
     update_agent_run(
         workflow_id=workflow_id,
         status=WorkflowStatus.COMPLETED.value,
+        completed_at=now_utc8(),
     )
 
     return {

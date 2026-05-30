@@ -1,12 +1,13 @@
 import json
 import os
+from config.settings import CONFIRMATION_TTL
 from services.redis_service import redis_client
 
 
 class ConfirmationService:
     def __init__(self):
         self.prefix = "career_agent:confirmation"
-        self.ttl_seconds = int(os.getenv("CONFIRMATION_TTL_SECONDS", 60 * 60 * 24))
+        self.ttl_seconds = CONFIRMATION_TTL
 
     def _build_key(self, confirmation_id: str):
         return f"{self.prefix}:{confirmation_id}"

@@ -4,10 +4,10 @@ from sqlalchemy import String, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.database import Base
+from app.utils.time import now_utc8
 
 
 class HumanConfirmation(Base):
-
     __tablename__ = "human_confirmations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -15,40 +15,51 @@ class HumanConfirmation(Base):
     confirmation_id: Mapped[str] = mapped_column(
         String(255),
         unique=True,
-        index=True
+        index=True,
     )
 
     workflow_id: Mapped[str] = mapped_column(
         String(255),
-        index=True
+        index=True,
+    )
+
+    actor_id: Mapped[str] = mapped_column(
+        String(255),
+        index=True,
     )
 
     action_type: Mapped[str] = mapped_column(
-        String(100)
+        String(100),
+        index=True,
     )
 
     status: Mapped[str] = mapped_column(
         String(50),
-        default="pending"
+        index=True,
     )
 
     user_action: Mapped[str] = mapped_column(
         String(50),
-        default=""
+        default="",
+    )
+
+    payload_snapshot: Mapped[str] = mapped_column(
+        Text,
+        default="",
     )
 
     message: Mapped[str] = mapped_column(
         Text,
-        default=""
+        default="",
     )
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow
+        DateTime(timezone=True),
+        default=now_utc8,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow
+        DateTime(timezone=True),
+        default=now_utc8,
+        onupdate=now_utc8,
     )

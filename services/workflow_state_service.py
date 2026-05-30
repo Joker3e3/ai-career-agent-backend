@@ -1,12 +1,13 @@
 import json
 import os
+from config.settings import WORKFLOW_STATE_TTL
 from services.redis_service import redis_client
 
 
 class WorkflowStateService:
     def __init__(self):
         self.prefix = "career_agent:workflow"
-        self.ttl_seconds = int(os.getenv("WORKFLOW_STATE_TTL_SECONDS", 60 * 60 * 24))
+        self.ttl_seconds = WORKFLOW_STATE_TTL
 
     def _build_key(self, workflow_id: str):
         return f"{self.prefix}:{workflow_id}"

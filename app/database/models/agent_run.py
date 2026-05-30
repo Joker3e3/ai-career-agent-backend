@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import String, DateTime, Text
+from sqlalchemy import String, DateTime, Text, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.database import Base
@@ -12,22 +12,64 @@ class AgentRun(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    workflow_id: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    workflow_id: Mapped[str] = mapped_column(
+        String(255),
+        unique=True,
+        index=True,
+    )
 
-    user_id: Mapped[str] = mapped_column(String(255), index=True)
+    user_id: Mapped[str] = mapped_column(
+        String(255),
+        index=True,
+    )
 
-    status: Mapped[str] = mapped_column(String(50), index=True)
+    run_type: Mapped[str] = mapped_column(
+        String(100),
+        default="career_analysis",
+        index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        index=True,
+    )
+
+    input_summary: Mapped[str] = mapped_column(
+        String(500),
+        default="",
+    )
 
     jd_text: Mapped[str] = mapped_column(Text)
 
+    match_score: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
     final_report: Mapped[str] = mapped_column(Text)
 
-    error_message: Mapped[str] = mapped_column(Text, default="")
+    error_message: Mapped[str] = mapped_column(
+        Text,
+        default="",
+    )
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=now_utc8
+        DateTime(timezone=True),
+        default=now_utc8,
+    )
+
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=now_utc8, onupdate=now_utc8
+        DateTime(timezone=True),
+        default=now_utc8,
+        onupdate=now_utc8,
     )
