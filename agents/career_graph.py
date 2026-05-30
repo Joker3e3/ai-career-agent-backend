@@ -7,6 +7,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
 from pydantic import ValidationError
 
+from agents.career.trace import trace_node
 from prompts.career_prompts import (
     ANALYZE_JD_PROMPT,
     EXTRACT_RESUME_PROMPT,
@@ -98,6 +99,7 @@ text_llm = ChatOpenAI(
 )
 
 
+@trace_node("retrieve_resume_evidence")
 def retrieve_resume_evidence(state: CareerAgentState):
 
     all_evidence = []
@@ -152,6 +154,7 @@ def retrieve_resume_evidence(state: CareerAgentState):
     }
 
 
+@trace_node("reflect_evidence")
 def reflect_evidence(state: CareerAgentState):
     prompt = REFLECT_EVIDENCE_PROMPT.format(
         query_plan=json.dumps(
@@ -180,6 +183,7 @@ def reflect_evidence(state: CareerAgentState):
     return {"reflection_result": reflection_result, "current_node": "reflect_evidence"}
 
 
+@trace_node("retry_retrieve_evidence")
 def retry_retrieve_evidence(state: CareerAgentState):
     reflection = state.get("reflection_result", {})
 
@@ -231,6 +235,7 @@ def retry_retrieve_evidence(state: CareerAgentState):
     }
 
 
+@trace_node("create_confirmation")
 def create_confirmation(state: CareerAgentState):
     confirmation_id = f"confirm_{uuid.uuid4()}"
     match_score = state.get("match_result", {}).get("match_score")
@@ -302,6 +307,7 @@ def filter_matched_skills_without_evidence(match_result: dict):
 # structured_jd_llm = llm.with_structured_output(JDAnalysis)
 
 
+@trace_node("build_retrieval_queries")
 def build_retrieval_queries(state: CareerAgentState):
 
     prompt = BUILD_RETRIEVAL_QUERIES_PROMPT.format(
@@ -326,6 +332,7 @@ def build_retrieval_queries(state: CareerAgentState):
     return {"query_plan": query_plan, "current_node": "build_retrieval_queries"}
 
 
+@trace_node("load_memory")
 def load_memory(state: CareerAgentState):
     user_id = state["user_id"]
     session_id = state["session_id"]
@@ -340,6 +347,7 @@ def load_memory(state: CareerAgentState):
     return {"memories": memories, "current_node": "load_memory"}
 
 
+@trace_node("save_memory")
 def save_memory(state: CareerAgentState):
     print("\n====== save_memory: 保存本次分析结果 ======")
 
@@ -361,6 +369,7 @@ def save_memory(state: CareerAgentState):
     return {"current_node": "save_memory"}
 
 
+@trace_node("analyze_jd")
 def analyze_jd(state: CareerAgentState):
     prompt = ANALYZE_JD_PROMPT.format(job_description=state["job_description"])
 
@@ -392,6 +401,7 @@ def analyze_jd(state: CareerAgentState):
     return {"jd_analysis": jd_analysis.model_dump(), "current_node": "analyze_jd"}
 
 
+@trace_node("extract_resume_profile")
 def extract_resume_profile(state: CareerAgentState):
 
     prompt = EXTRACT_RESUME_PROMPT.format(
@@ -433,6 +443,7 @@ def extract_resume_profile(state: CareerAgentState):
     }
 
 
+@trace_node("match_job")
 def match_job(state: CareerAgentState):
 
     prompt = MATCH_JOB_PROMPT.format(
@@ -466,6 +477,7 @@ def match_job(state: CareerAgentState):
     return {"match_result": match_result, "current_node": "match_job"}
 
 
+@trace_node("generate_learning_plan")
 def generate_learning_plan(state: CareerAgentState):
 
     print("\n====== generate_learning_plan: 输入 state ======")
@@ -485,6 +497,7 @@ def generate_learning_plan(state: CareerAgentState):
     return {"learning_plan": "", "current_node": "generate_learning_plan"}
 
 
+@trace_node("generate_interview_tips")
 def generate_interview_tips(state: CareerAgentState):
 
     prompt = GENERATE_INTERVIEW_TIPS_PROMPT.format(
@@ -524,6 +537,7 @@ def route_after_reflection(state: CareerAgentState):
     return "extract_resume_profile"
 
 
+@trace_node("generate_cover_letter")
 def generate_cover_letter(state: CareerAgentState):
     prompt = GENERATE_COVER_LETTER_PROMPT.format(
         jd_analysis=json.dumps(state["jd_analysis"], ensure_ascii=False),
@@ -537,6 +551,7 @@ def generate_cover_letter(state: CareerAgentState):
 
 
 # ============================================================
+@trace_node("generate_report")
 def generate_report(state: CareerAgentState):
     report = f"""
 # AI 求职分析报告
@@ -628,6 +643,7 @@ def generate_report(state: CareerAgentState):
     return {"final_report": report, "current_node": "generate_report"}
 
 
+@trace_node("confirm_node")
 def confirm_node(state: CareerAgentState):
 
     action = state.get("human_action", "")

@@ -19,3 +19,8 @@ class ConfirmationAction(str, Enum):
     APPROVE = "approve"
     REVISE = "revise"
     REJECT = "reject"
+
+class AgentStepStatus(str, Enum):
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
