@@ -8,7 +8,8 @@ from app.constants.workflow_status import AgentStepStatus
 def create_agent_step(
     workflow_id: str,
     node_name: str,
-    started_at: datetime
+    started_at: datetime,
+    input_summary: str | None = None,
 ):
     db = SessionLocal()
 
@@ -32,6 +33,7 @@ def create_agent_step(
             started_at=started_at,
             step_order=next_step_order,
             status=AgentStepStatus.RUNNING.value,
+            input_summary=input_summary
         )
 
         db.add(agent_step)

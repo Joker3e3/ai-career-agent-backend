@@ -10,6 +10,7 @@ from app.database.repositories.tool_call_repository import (
     update_tool_call,
 )
 from app.utils.time import now_utc8
+from agents.career.trace_summary import build_node_input_summary
 
 
 def trace_node(node_name: str):
@@ -22,9 +23,16 @@ def trace_node(node_name: str):
                 return func(state, *args, **kwargs)
 
             start_time = now_utc8()
+            input_summary = build_node_input_summary(
+                node_name=node_name,
+                state=state,
+            )
 
             step = create_agent_step(
-                workflow_id=workflow_id, node_name=node_name, started_at=start_time
+                workflow_id=workflow_id,
+                node_name=node_name,
+                started_at=start_time,
+                input_summary=input_summary,
             )
             state["_current_step_id"] = step.id
 
