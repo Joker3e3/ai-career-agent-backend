@@ -3,10 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+from tasks.career_analysis_task import test_task
+
 load_dotenv()
 
 from agents.career_graph import run_career_agent, run_confirm_workflow
-from services.career_analysis_service import submit_career_analysis, execute_career_analysis_workflow
+from services.career_analysis_service import (
+    submit_career_analysis,
+    execute_career_analysis_workflow,
+)
 from schemas.confirm_schema import ConfirmRequest
 from routers.career_agent_router import router as career_agent_router
 
@@ -43,15 +48,8 @@ def analyze_career(request: CareerAnalyzeRequest):
         resume_text=request.resume_text,
     )
 
-    execute_result = execute_career_analysis_workflow(
-        workflow_id=submit_result["workflow_id"],
-        user_id=request.user_id,
-        session_id=request.session_id,
-        job_description=request.job_description,
-        resume_text=request.resume_text,
-    )
+    return submit_result
 
-    return execute_result
 
 @app.post("/career_agent/confirm")
 async def confirm_action(request: ConfirmRequest):
@@ -61,6 +59,16 @@ async def confirm_action(request: ConfirmRequest):
         confirmation_id=request.confirmation_id,
         human_action=request.action.value,
     )
+
+
+@app.get("/test-celery")
+async def test_celery():
+    async_result = test_task.delay()
+
+    return {
+        "message": "任务已提交",
+        "task_id": async_result.id,
+    }
 
 
 if __name__ == "__main__":

@@ -317,6 +317,8 @@ def create_confirmation(state: CareerAgentState):
     finally:
         db.close()
 
+    print("create_confirmation")
+
     return {
         "confirmation_id": confirmation_id,
         "workflow_status": "waiting_human_confirmation",

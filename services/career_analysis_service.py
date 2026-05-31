@@ -42,14 +42,15 @@ def submit_career_analysis(
     finally:
         db.close()
 
-    # 后续接 Celery 时，这里会变成：
-    # execute_career_analysis_workflow.delay(
-    #     workflow_id=workflow_id,
-    #     user_id=user_id,
-    #     session_id=session_id,
-    #     job_description=job_description,
-    #     resume_text=resume_text,
-    # )
+    from tasks.career_analysis_task import execute_career_analysis_task
+
+    execute_career_analysis_task.delay(
+        workflow_id=workflow_id,
+        user_id=user_id,
+        session_id=session_id,
+        job_description=job_description,
+        resume_text=resume_text,
+    )
 
     return {
         "success": True,
