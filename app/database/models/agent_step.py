@@ -10,9 +10,7 @@ from app.utils.time import now_utc8
 class AgentStep(Base):
     __tablename__ = "agent_steps"
 
-    id: Mapped[int] = mapped_column(
-        primary_key=True
-    )
+    id: Mapped[int] = mapped_column(primary_key=True)
 
     workflow_id: Mapped[str] = mapped_column(
         String(255),
@@ -43,9 +41,9 @@ class AgentStep(Base):
         default="",
     )
 
-    error_message: Mapped[str] = mapped_column(
+    error_message: Mapped[str | None] = mapped_column(
         Text,
-        default="",
+        nullable=True,
     )
 
     started_at: Mapped[datetime | None] = mapped_column(

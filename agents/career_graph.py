@@ -7,7 +7,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
 from pydantic import ValidationError
 
-from agents.career.trace import trace_node
+from agents.career.trace import trace_node, trace_tool
 from prompts.career_prompts import (
     ANALYZE_JD_PROMPT,
     EXTRACT_RESUME_PROMPT,
@@ -38,6 +38,7 @@ from app.database.repositories.human_confirmation_repository import (
     create_human_confirmation,
     update_human_confirmation,
 )
+from app.database.database import SessionLocal
 
 from app.constants.workflow_status import ConfirmationStatus, WorkflowStatus
 from app.utils.time import now_utc8
@@ -119,7 +120,10 @@ def retrieve_resume_evidence(state: CareerAgentState):
         final_query = f"{semantic_query}\n关键词：{keyword_query}"
 
         evidence_list = retrieve_evidence_from_rag(
-            user_id=state["user_id"], query=final_query
+            user_id=state["user_id"],
+            query=final_query,
+            workflow_id=state["workflow_id"],
+            step_id=state.get("_current_step_id"),
         )
 
         for evidence in evidence_list:
@@ -203,7 +207,10 @@ def retry_retrieve_evidence(state: CareerAgentState):
         final_query = f"{retry_query}\n关键词：{' '.join(keywords)}"
 
         evidence_list = retrieve_evidence_from_rag(
-            user_id=state["user_id"], query=final_query
+            user_id=state["user_id"],
+            query=final_query,
+            workflow_id=state["workflow_id"],
+            step_id=state.get("_current_step_id"),
         )
 
         for evidence in evidence_list:
@@ -268,26 +275,40 @@ def create_confirmation(state: CareerAgentState):
         workflow_id=state["workflow_id"], state=checkpoint_state
     )
 
-    create_agent_run(
-        workflow_id=state["workflow_id"],
-        user_id=state["user_id"],
-        run_type="career_analysis",
-        status=WorkflowStatus.WAITING_HUMAN_CONFIRMATION.value,
-        input_summary=state["job_description"][:200],
-        jd_text=state["job_description"],
-        match_score=match_score,
-        final_report=state["final_report"],
-        started_at=now_utc8(),
-    )
+    db = SessionLocal()
 
-    create_human_confirmation(
-        confirmation_id=confirmation_id,
-        workflow_id=state["workflow_id"],
-        actor_id=state["user_id"],
-        action_type="cover_letter_approval",
-        status=ConfirmationStatus.PENDING.value,
-        payload_snapshot=state.get("cover_letter", ""),
-    )
+    try:
+        create_agent_run(
+            db=db,
+            workflow_id=state["workflow_id"],
+            user_id=state["user_id"],
+            run_type="career_analysis",
+            status=WorkflowStatus.WAITING_HUMAN_CONFIRMATION.value,
+            input_summary=state["job_description"][:200],
+            jd_text=state["job_description"],
+            match_score=match_score,
+            final_report=state["final_report"],
+            started_at=now_utc8(),
+        )
+
+        create_human_confirmation(
+            db=db,
+            confirmation_id=confirmation_id,
+            workflow_id=state["workflow_id"],
+            actor_id=state["user_id"],
+            action_type="cover_letter_approval",
+            status=ConfirmationStatus.PENDING.value,
+            payload_snapshot=state.get("cover_letter", ""),
+        )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
 
     return {
         "confirmation_id": confirmation_id,
@@ -818,18 +839,31 @@ def run_confirm_workflow(workflow_id: str, confirmation_id: str, human_action: s
     workflow_state_service.update_state(workflow_id=workflow_id, updates=result)
 
     # 改PostSQL
-    update_human_confirmation(
-        confirmation_id=confirmation_id,
-        status=result["confirmation_status"],
-        user_action=human_action,
-        message=result.get("confirmation_message", ""),
-    )
+    db = SessionLocal()
+    try:
+        update_human_confirmation(
+            db=db,
+            confirmation_id=confirmation_id,
+            status=result["confirmation_status"],
+            user_action=human_action,
+            message=result.get("confirmation_message"),
+        )
 
-    update_agent_run(
-        workflow_id=workflow_id,
-        status=WorkflowStatus.COMPLETED.value,
-        completed_at=now_utc8(),
-    )
+        update_agent_run(
+            db=db,
+            workflow_id=workflow_id,
+            status=WorkflowStatus.COMPLETED.value,
+            completed_at=now_utc8(),
+        )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
 
     return {
         "success": True,

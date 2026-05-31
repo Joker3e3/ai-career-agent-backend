@@ -4,6 +4,7 @@ from app.database.database import engine, Base
 from app.database.models.agent_run import AgentRun
 from app.database.models.human_confirmation import HumanConfirmation
 from app.database.models.agent_step import AgentStep
+from app.database.models.tool_call import ToolCall
 
 
 def init_db():

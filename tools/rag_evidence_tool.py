@@ -1,6 +1,8 @@
 import os
 import requests
 
+from agents.career.trace import trace_tool
+
 
 RAG_SERVICE_URL = os.getenv(
     "RAG_SERVICE_URL",
@@ -8,9 +10,12 @@ RAG_SERVICE_URL = os.getenv(
 )
 
 
+@trace_tool(tool_name="resume_rag_retriever", tool_type="rag")
 def retrieve_evidence_from_rag(
     user_id: str,
-    query: str
+    query: str,
+    workflow_id: str | None = None,
+    step_id: int | None = None,
 ) -> list[dict]:
     url = f"{RAG_SERVICE_URL}/retrieve_evidence"
 

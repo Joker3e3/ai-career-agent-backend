@@ -38,9 +38,9 @@ class HumanConfirmation(Base):
         index=True,
     )
 
-    user_action: Mapped[str] = mapped_column(
+    user_action: Mapped[str | None] = mapped_column(
         String(50),
-        default="",
+        nullable=True,
     )
 
     payload_snapshot: Mapped[str] = mapped_column(
@@ -48,9 +48,9 @@ class HumanConfirmation(Base):
         default="",
     )
 
-    message: Mapped[str] = mapped_column(
+    message: Mapped[str | None] = mapped_column(
         Text,
-        default="",
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(

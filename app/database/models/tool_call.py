@@ -7,25 +7,29 @@ from app.database.database import Base
 from app.utils.time import now_utc8
 
 
-class AgentRun(Base):
-    __tablename__ = "agent_runs"
+class ToolCall(Base):
+    __tablename__ = "tool_calls"
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
     workflow_id: Mapped[str] = mapped_column(
         String(255),
-        unique=True,
         index=True,
     )
 
-    user_id: Mapped[str] = mapped_column(
-        String(255),
+    step_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
         index=True,
     )
 
-    run_type: Mapped[str] = mapped_column(
+    tool_name: Mapped[str] = mapped_column(
         String(100),
-        default="career_analysis",
+        index=True,
+    )
+
+    tool_type: Mapped[str] = mapped_column(
+        String(50),
         index=True,
     )
 
@@ -35,27 +39,18 @@ class AgentRun(Base):
     )
 
     input_summary: Mapped[str] = mapped_column(
-        String(500),
+        Text,
         default="",
     )
 
-    jd_text: Mapped[str] = mapped_column(Text)
-
-    match_score: Mapped[int | None] = mapped_column(
-        Integer,
-        nullable=True,
+    output_summary: Mapped[str] = mapped_column(
+        Text,
+        default="",
     )
-
-    final_report: Mapped[str] = mapped_column(Text)
 
     error_message: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=now_utc8,
     )
 
     started_at: Mapped[datetime | None] = mapped_column(
@@ -63,13 +58,17 @@ class AgentRun(Base):
         nullable=True,
     )
 
-    completed_at: Mapped[datetime | None] = mapped_column(
+    ended_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    updated_at: Mapped[datetime] = mapped_column(
+    duration_ms: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=now_utc8,
-        onupdate=now_utc8,
     )
