@@ -3,8 +3,8 @@ from datetime import datetime
 from sqlalchemy import String, DateTime, Text, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.database.database import Base
-from app.utils.time import now_utc8
+from database.database import Base
+from utils.time import now_utc8
 
 
 class AgentStep(Base):

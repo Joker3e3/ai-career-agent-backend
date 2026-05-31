@@ -1,6 +1,6 @@
-from app.database.database import SessionLocal
-from app.database.models.tool_call import ToolCall
-from app.constants.workflow_status import AgentStepStatus
+from database.database import SessionLocal
+from database.models.tool_call import ToolCall
+from constants.workflow_status import AgentStepStatus
 
 
 def create_tool_call(
@@ -41,11 +41,7 @@ def update_tool_call(
     db = SessionLocal()
 
     try:
-        tool_call = (
-            db.query(ToolCall)
-            .filter(ToolCall.id == tool_call_id)
-            .first()
-        )
+        tool_call = db.query(ToolCall).filter(ToolCall.id == tool_call_id).first()
 
         if not tool_call:
             return None
@@ -57,6 +53,18 @@ def update_tool_call(
         db.refresh(tool_call)
 
         return tool_call
+
+    finally:
+        db.close()
+
+
+def list_tool_calls_by_workflow_id(
+    workflow_id: str,
+):
+    db = SessionLocal()
+
+    try:
+        return db.query(ToolCall).filter(ToolCall.workflow_id == workflow_id).all()
 
     finally:
         db.close()

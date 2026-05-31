@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Literal
-from app.constants.workflow_status import ConfirmationAction
+from constants.workflow_status import ConfirmationAction
 
 
 class ConfirmRequest(BaseModel):

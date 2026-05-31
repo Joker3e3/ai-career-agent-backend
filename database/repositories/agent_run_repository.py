@@ -2,8 +2,8 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.database.database import SessionLocal
-from app.database.models.agent_run import AgentRun
+from database.database import SessionLocal
+from database.models.agent_run import AgentRun
 
 
 def create_agent_run(

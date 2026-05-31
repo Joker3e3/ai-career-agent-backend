@@ -1,8 +1,8 @@
 from datetime import datetime
 
-from app.database.database import SessionLocal
-from app.database.models.agent_step import AgentStep
-from app.constants.workflow_status import AgentStepStatus
+from database.database import SessionLocal
+from database.models.agent_step import AgentStep
+from constants.workflow_status import AgentStepStatus
 
 
 def create_agent_step(
@@ -33,7 +33,7 @@ def create_agent_step(
             started_at=started_at,
             step_order=next_step_order,
             status=AgentStepStatus.RUNNING.value,
-            input_summary=input_summary
+            input_summary=input_summary,
         )
 
         db.add(agent_step)
@@ -65,6 +65,23 @@ def update_agent_step(
         db.refresh(agent_step)
 
         return agent_step
+
+    finally:
+        db.close()
+
+
+def list_agent_steps_by_workflow_id(
+    workflow_id: str,
+):
+    db = SessionLocal()
+
+    try:
+        return (
+            db.query(AgentStep)
+            .filter(AgentStep.workflow_id == workflow_id)
+            .order_by(AgentStep.step_order.asc())
+            .all()
+        )
 
     finally:
         db.close()

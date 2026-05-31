@@ -29,19 +29,19 @@ from services.confirmation_service import ConfirmationService
 
 from tools.rag_evidence_tool import retrieve_evidence_from_rag
 
-from app.database.repositories.agent_run_repository import (
+from database.repositories.agent_run_repository import (
     create_agent_run,
     get_agent_run_by_workflow_id,
     update_agent_run,
 )
-from app.database.repositories.human_confirmation_repository import (
+from database.repositories.human_confirmation_repository import (
     create_human_confirmation,
     update_human_confirmation,
 )
-from app.database.database import SessionLocal
+from database.database import SessionLocal
 
-from app.constants.workflow_status import ConfirmationStatus, WorkflowStatus
-from app.utils.time import now_utc8
+from constants.workflow_status import ConfirmationStatus, WorkflowStatus
+from utils.time import now_utc8
 
 from agents.career.state_policy import build_checkpoint_state
 

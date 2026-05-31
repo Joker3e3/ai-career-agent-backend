@@ -7,6 +7,7 @@ load_dotenv()
 
 from agents.career_graph import run_career_agent, run_confirm_workflow
 from schemas.confirm_schema import ConfirmRequest
+from routers.career_agent_router import router as career_agent_router
 
 app = FastAPI()
 
@@ -20,6 +21,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(career_agent_router)
 
 
 class CareerAnalyzeRequest(BaseModel):

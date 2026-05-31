@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
-from app.database.database import SessionLocal
-from app.database.models.human_confirmation import HumanConfirmation
+from database.database import SessionLocal
+from database.models.human_confirmation import HumanConfirmation
 
 
 def create_human_confirmation(
