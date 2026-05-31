@@ -278,17 +278,24 @@ def create_confirmation(state: CareerAgentState):
     db = SessionLocal()
 
     try:
-        create_agent_run(
+        # create_agent_run(
+        #     db=db,
+        #     workflow_id=state["workflow_id"],
+        #     user_id=state["user_id"],
+        #     run_type="career_analysis",
+        #     status=WorkflowStatus.WAITING_HUMAN_CONFIRMATION.value,
+        #     input_summary=state["job_description"][:200],
+        #     jd_text=state["job_description"],
+        #     match_score=match_score,
+        #     final_report=state["final_report"],
+        #     started_at=now_utc8(),
+        # )
+        update_agent_run(
             db=db,
             workflow_id=state["workflow_id"],
-            user_id=state["user_id"],
-            run_type="career_analysis",
             status=WorkflowStatus.WAITING_HUMAN_CONFIRMATION.value,
-            input_summary=state["job_description"][:200],
-            jd_text=state["job_description"],
             match_score=match_score,
             final_report=state["final_report"],
-            started_at=now_utc8(),
         )
 
         create_human_confirmation(

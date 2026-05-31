@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from agents.career_graph import run_career_agent, run_confirm_workflow
+from services.career_analysis_service import submit_career_analysis, execute_career_analysis_workflow
 from schemas.confirm_schema import ConfirmRequest
 from routers.career_agent_router import router as career_agent_router
 
@@ -35,13 +36,22 @@ class CareerAnalyzeRequest(BaseModel):
 @app.post("/career_agent/analyze")
 def analyze_career(request: CareerAnalyzeRequest):
 
-    return run_career_agent(
-        session_id=request.session_id,
+    submit_result = submit_career_analysis(
         user_id=request.user_id,
+        session_id=request.session_id,
         job_description=request.job_description,
         resume_text=request.resume_text,
     )
 
+    execute_result = execute_career_analysis_workflow(
+        workflow_id=submit_result["workflow_id"],
+        user_id=request.user_id,
+        session_id=request.session_id,
+        job_description=request.job_description,
+        resume_text=request.resume_text,
+    )
+
+    return execute_result
 
 @app.post("/career_agent/confirm")
 async def confirm_action(request: ConfirmRequest):

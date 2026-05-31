@@ -2,6 +2,7 @@ from enum import Enum
 
 
 class WorkflowStatus(str, Enum):
+    QUEUED = "queued"
     RUNNING = "running"
     WAITING_HUMAN_CONFIRMATION = "waiting_human_confirmation"
     COMPLETED = "completed"

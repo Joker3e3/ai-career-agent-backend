@@ -15,7 +15,7 @@ def create_agent_run(
     input_summary: str,
     jd_text: str,
     match_score: int | None,
-    final_report: str,
+    final_report: str | None = None,
     started_at: datetime | None = None,
 ):
     agent_run = AgentRun(

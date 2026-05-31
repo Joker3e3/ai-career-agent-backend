@@ -48,6 +48,21 @@ def get_human_confirmation_by_id(confirmation_id: str):
         db.close()
 
 
+def get_latest_confirmation_by_workflow_id(workflow_id: str):
+    db = SessionLocal()
+
+    try:
+        return (
+            db.query(HumanConfirmation)
+            .filter(HumanConfirmation.workflow_id == workflow_id)
+            .order_by(HumanConfirmation.created_at.desc())
+            .first()
+        )
+
+    finally:
+        db.close()
+
+
 def update_human_confirmation(
     db: Session,
     confirmation_id: str,

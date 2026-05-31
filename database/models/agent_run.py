@@ -46,7 +46,10 @@ class AgentRun(Base):
         nullable=True,
     )
 
-    final_report: Mapped[str] = mapped_column(Text)
+    final_report: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
 
     error_message: Mapped[str | None] = mapped_column(
         Text,
