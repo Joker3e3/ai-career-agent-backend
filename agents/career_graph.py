@@ -1,4 +1,3 @@
-import os
 from typing import TypedDict, Any
 
 import json
@@ -7,6 +6,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
 from pydantic import ValidationError
 
+from llms.llm_client import json_llm, text_llm
 from agents.career.trace import trace_node, trace_tool
 from prompts.career_prompts import (
     ANALYZE_JD_PROMPT,
@@ -24,6 +24,11 @@ from schemas.match_schema import MatchResult
 from schemas.query_schema import QueryPlan
 from schemas.reflection_schema import ReflectionResult
 from schemas.react_decision import ReactDecision
+from services.long_term_memory_service import (
+    load_long_term_memories,
+    save_application_history,
+    update_user_long_term_memory,
+)
 from services.session_memory_service import SessionMemoryService
 from services.workflow_state_service import WorkflowStateService
 from services.confirmation_service import ConfirmationService
@@ -87,22 +92,6 @@ class CareerAgentState(TypedDict, total=False):
     confirmation_status: str
     confirmation_message: str
     available_tools: list[dict[str, Any]]
-
-
-json_llm = ChatOpenAI(
-    api_key=os.getenv("DEEPSEEK_API_KEY"),
-    base_url=os.getenv("DEEPSEEK_BASE_URL"),
-    model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
-    temperature=0.2,
-    model_kwargs={"response_format": {"type": "json_object"}},
-)
-
-text_llm = ChatOpenAI(
-    api_key=os.getenv("DEEPSEEK_API_KEY"),
-    base_url=os.getenv("DEEPSEEK_BASE_URL"),
-    model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
-    temperature=0.2,
-)
 
 
 @trace_node("retrieve_resume_evidence")
@@ -508,38 +497,85 @@ def build_retrieval_queries(state: CareerAgentState):
 @trace_node("load_memory")
 def load_memory(state: CareerAgentState):
     user_id = state["user_id"]
-    session_id = state["session_id"]
+    # session_id = state["session_id"]
 
-    memories = session_memory_service.get_memories(
-        user_id=user_id, session_id=session_id
+    # memories = session_memory_service.get_memories(
+    #     user_id=user_id, session_id=session_id
+    # )
+
+    long_term_memories = load_long_term_memories(
+        user_id=user_id,
+        limit=5,
     )
 
-    print("\n====== load_memory: 历史 memories ======")
-    print(memories)
+    application_history = long_term_memories.get("application_history", [])
 
-    return {"memories": memories, "current_node": "load_memory"}
+    profile_summary = long_term_memories.get("profile_summary", "")
+
+    preference = long_term_memories.get("preference", "")
+
+    print("\n====== load_memory: 输出 long_term_memories ======")
+    print(long_term_memories)
+
+    return {
+        "memories": application_history,
+        "application_history": application_history,
+        "profile_summary": profile_summary,
+        "preference": preference,
+        "current_node": "load_memory",
+    }
+
+    # print("\n====== load_memory: 历史 memories ======")
+    # print(memories)
+
+    # return {"memories": memories, "current_node": "load_memory"}
 
 
 @trace_node("save_memory")
 def save_memory(state: CareerAgentState):
     print("\n====== save_memory: 保存本次分析结果 ======")
+    user_id = state["user_id"]
+    workflow_id = state["workflow_id"]
 
-    match = state["match_result"]
+    jd_analysis = state.get("jd_analysis", {})
+    match_result = state.get("match_result", {})
+    final_report = state.get("final_report", "")
 
-    memory = {
-        "job_title": state["jd_analysis"].get("role_title", ""),
-        "match_score": match.get("match_score", 0),
-        "missing_skills": match.get("missing_skills", []),
-        "summary": match.get("summary", ""),
-    }
-
-    session_memory_service.save_memory(
-        user_id=state["user_id"], session_id=state["session_id"], memory=memory
+    save_application_history(
+        user_id=user_id,
+        workflow_id=workflow_id,
+        jd_analysis=jd_analysis,
+        match_result=match_result,
+        final_report=final_report,
     )
 
-    print(memory)
+    updated_memory = update_user_long_term_memory(
+        user_id=user_id,
+        jd_analysis=jd_analysis,
+        match_result=match_result,
+        final_report=final_report,
+    )
 
-    return {"current_node": "save_memory"}
+    # match = state["match_result"]
+
+    # memory = {
+    #     "job_title": state["jd_analysis"].get("role_title", ""),
+    #     "match_score": match.get("match_score", 0),
+    #     "missing_skills": match.get("missing_skills", []),
+    #     "summary": match.get("summary", ""),
+    # }
+
+    # session_memory_service.save_memory(
+    #     user_id=state["user_id"], session_id=state["session_id"], memory=memory
+    # )
+
+    # print(memory)
+
+    return {
+        "current_node": "save_memory",
+        "profile_summary": updated_memory["profile_summary"],
+        "preference": updated_memory["preference"],
+    }
 
 
 @trace_node("analyze_jd")

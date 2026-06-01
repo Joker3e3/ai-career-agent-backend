@@ -5,6 +5,7 @@ from database.models.agent_run import AgentRun
 from database.models.human_confirmation import HumanConfirmation
 from database.models.agent_step import AgentStep
 from database.models.tool_call import ToolCall
+from database.models.user_memories import UserMemory
 
 
 def init_db():

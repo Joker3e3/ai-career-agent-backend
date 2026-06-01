@@ -7,6 +7,10 @@ import os
 
 load_dotenv()
 
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+
 WORKFLOW_STATE_TTL = int(os.getenv("WORKFLOW_STATE_TTL", 86400))
 
 CONFIRMATION_TTL = int(os.getenv("CONFIRMATION_TTL", 86400))
