@@ -28,6 +28,7 @@ from services.workflow_state_service import WorkflowStateService
 from services.confirmation_service import ConfirmationService
 
 from tools.rag_evidence_tool import retrieve_evidence_from_rag
+from tools.tool_executor import call_tool
 
 from database.repositories.agent_run_repository import (
     create_agent_run,
@@ -120,7 +121,14 @@ def retrieve_resume_evidence(state: CareerAgentState):
 
         final_query = f"{semantic_query}\n关键词：{keyword_query}"
 
-        evidence_list = retrieve_evidence_from_rag(
+        # evidence_list = retrieve_evidence_from_rag(
+        #     user_id=state["user_id"],
+        #     query=final_query,
+        #     workflow_id=state["workflow_id"],
+        #     step_id=state.get("_current_step_id"),
+        # )
+        evidence_list = call_tool(
+            tool_name="resume_rag_retriever",
             user_id=state["user_id"],
             query=final_query,
             workflow_id=state["workflow_id"],
@@ -207,7 +215,14 @@ def retry_retrieve_evidence(state: CareerAgentState):
 
         final_query = f"{retry_query}\n关键词：{' '.join(keywords)}"
 
-        evidence_list = retrieve_evidence_from_rag(
+        # evidence_list = retrieve_evidence_from_rag(
+        #     user_id=state["user_id"],
+        #     query=final_query,
+        #     workflow_id=state["workflow_id"],
+        #     step_id=state.get("_current_step_id"),
+        # )
+        evidence_list = call_tool(
+            tool_name="resume_rag_retriever",
             user_id=state["user_id"],
             query=final_query,
             workflow_id=state["workflow_id"],

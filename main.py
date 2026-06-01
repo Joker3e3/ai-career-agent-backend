@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from tasks.career_analysis_task import test_task
+from tools import register_all_tools
 
 load_dotenv()
 
@@ -16,6 +17,8 @@ from schemas.confirm_schema import ConfirmRequest
 from routers.career_agent_router import router as career_agent_router
 
 app = FastAPI()
+
+register_all_tools()
 
 app.add_middleware(
     CORSMiddleware,
