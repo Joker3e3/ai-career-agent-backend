@@ -1,13 +1,33 @@
 ANALYZE_JD_PROMPT = """
-你是一个 AI 求职分析助手。
+你是一个通用岗位 JD 分析助手。
 
-请从下面的岗位 JD 中，提取岗位需要的能力要求。
+请从下面的岗位 JD 中，提取岗位事实信息。
 
 要求：
 1. 不要评价候选人
 2. 不要生成学习建议
 3. 只分析岗位本身
-4. 输出简洁 Markdown
+4. 只输出 JSON
+5. 不要输出 Markdown
+6. 不要添加解释
+7. 不要假设岗位一定是技术岗
+8. requirements 应该根据 JD 动态生成能力域
+9. dimension 表示能力域，不要太细，也不要太泛
+10. keywords 表示该能力域下的具体技能、工具、关键词或经验要求
+11. priority 只能是 high / medium / low
+
+能力域示例：
+- 技术岗可以是：前端开发、后端开发、AI工程、工程化部署、数据分析、项目经验
+- 人事岗可以是：招聘执行、员工关系、薪酬绩效、组织协调
+- 行政岗可以是：行政协调、办公事务、资产管理、会议支持
+- 销售岗可以是：客户开发、商务沟通、销售转化、客户维护
+- 产品岗可以是：需求分析、产品设计、项目推进、用户研究
+
+注意：
+- 不要把具体技能直接当成 dimension，例如不要输出 “RAG项目经验” 或 “Vue经验”
+- 应该输出 “AI工程” + keywords ["RAG", "Agent", "LangGraph"]
+- 应该输出 “前端开发” + keywords ["Vue"]
+- 应该输出 “后端开发” + keywords ["FastAPI"]
 
 岗位 JD：
 {job_description}
@@ -16,14 +36,17 @@ ANALYZE_JD_PROMPT = """
 
 {{
   "role_title": "岗位名称",
-  "required_skills": ["必备技能"],
-  "preferred_skills": ["加分技能"],
-  "frontend_skills": ["前端技能"],
-  "backend_skills": ["后端技能"],
-  "ai_skills": ["AI相关技能"],
-  "infra_skills": ["工程化/部署/中间件技能"],
-  "soft_skills": ["软技能"],
-  "responsibilities": ["核心职责"]
+  "role_category": "岗位类别，例如 tech / hr / admin / sales / product / finance / operation / other",
+  "requirements": [
+    {{
+      "dimension": "能力域名称，例如 前端开发 / 后端开发 / AI工程 / 招聘执行 / 行政协调 / 客户开发",
+      "priority": "high",
+      "keywords": ["关键词1", "关键词2"],
+      "description": "该能力域在岗位中的含义"
+    }}
+  ],
+  "responsibilities": ["核心职责"],
+  "background_requirements": ["学历、年限、行业、证书等背景要求"]
 }}
 """
 
@@ -230,37 +253,40 @@ GENERATE_COVER_LETTER_PROMPT = """
 
 
 BUILD_RETRIEVAL_QUERIES_PROMPT = """
-你是一个 RAG 检索规划助手。
+你是一个 RAG Query Builder。
 
-请根据岗位 JD 分析结果，生成用于检索候选人简历/项目经历的查询计划。
+你的任务不是重新分析岗位，也不是重新规划能力维度。
+
+你的任务是根据 execution_plan 中已经确定的 retrieval_dimensions，
+为每个检索维度生成一个适合 RAG 检索候选人简历的 query。
 
 要求：
 1. 只输出 JSON
 2. 不要输出 Markdown
 3. 不要添加解释
-4. 每个 query 应该用于检索一个能力维度
-5. query 使用自然语言表达，适合向量检索
-6. keywords 使用关键词数组，适合 BM25 / Hybrid Search
-7. queries 数组长度最大为 5
-8. 除技能维度 query 外，必须生成一个 dimension 为 "background" 的 query，用于检索教育经历、个人背景、项目概述、整体经历、学历程度、毕业院校。
-9. background query 不参与技能匹配，只用于生成简历画像、求职自我介绍和 cover letter。
+4. 每个 retrieval_dimension 必须生成且只能生成一个 query，queries 数组长度必须等于 retrieval_dimensions 数量。
+5. 每个 query 必须来自 execution_plan.retrieval_dimensions
+6. 不要新增 execution_plan 中不存在的能力维度
+7. 必须保留 background 维度
+8. query 使用自然语言表达，适合向量检索
+9. keywords 直接来自对应 retrieval_dimension.keywords，可以少量补充同义词，但不要偏离原维度
 
-岗位 JD 分析结果：
-{jd_analysis}
+execution_plan：
+{execution_plan}
 
 请严格按照以下 JSON 结构输出：
 
 {{
   "queries": [
     {{
-      "dimension": "frontend",
-      "query": "寻找候选人是否具备 Vue 前端项目经验，包括页面开发、组件化和前后端交互。",
-      "keywords": ["Vue", "前端", "组件", "页面"]
+      "dimension": "前端开发",
+      "query": "寻找候选人是否具备前端开发经验，特别是 Vue 项目、页面开发、组件开发和前后端交互经验。",
+      "keywords": ["Vue", "前端开发", "页面开发", "组件"]
     }},
     {{
       "dimension": "background",
-      "query": "寻找候选人的教育经历、个人背景、项目概述和整体求职优势。",
-      "keywords": ["教育经历", "学历", "项目经历", "个人背景", "求职优势"]
+      "query": "寻找候选人的教育经历、工作经历、项目概述、个人背景和整体求职优势。",
+      "keywords": ["教育经历", "学历", "工作经历", "项目经历", "个人背景", "求职优势"]
     }}
   ]
 }}

@@ -68,6 +68,7 @@ class CareerAgentState(TypedDict, total=False):
     background_evidence: list[dict]
     rag_evidence: list[dict[str, Any]]
     query_plan: dict[str, Any]
+    execution_plan: dict[str, Any]
 
     reflection_result: dict[str, Any]
     retry_evidence: list[dict[str, Any]]
@@ -337,11 +338,80 @@ def filter_matched_skills_without_evidence(match_result: dict):
 # structured_jd_llm = llm.with_structured_output(JDAnalysis)
 
 
+@trace_node("plan_career_analysis")
+def plan_career_analysis(state: CareerAgentState):
+    jd_analysis = state.get("jd_analysis", {})
+
+    requirements = jd_analysis.get("requirements", [])
+
+    retrieval_dimensions = []
+
+    for item in requirements:
+        retrieval_dimensions.append(
+            {
+                "dimension": item.get("dimension", ""),
+                "priority": item.get("priority", "medium"),
+                "keywords": item.get("keywords", []),
+                "purpose": item.get("description", ""),
+                "source": "jd_requirement",
+            }
+        )
+
+    retrieval_dimensions.append(
+        {
+            "dimension": "background",
+            "priority": "required",
+            "keywords": [
+                "教育经历",
+                "学历",
+                "工作经历",
+                "项目经历",
+                "个人背景",
+                "求职优势",
+            ],
+            "purpose": "检索候选人的教育经历、整体经历、项目概述和求职优势，用于简历画像、求职自我介绍和 Cover Letter",
+            "source": "system_required",
+        }
+    )
+
+    execution_plan = {
+        "goal": "评估候选人与岗位要求的匹配度，并生成求职分析报告、学习建议、面试建议和 Cover Letter",
+        "role_title": jd_analysis.get("role_title", ""),
+        "role_category": jd_analysis.get("role_category", "other"),
+        "retrieval_policy": {
+            "max_queries": 5,
+            "must_include_background_query": True,
+            "prioritize_high_priority_requirements": True,
+        },
+        "retrieval_dimensions": retrieval_dimensions,
+        "retry_policy": {
+            "max_retry": state.get("max_retry", 1),
+            "retry_when": "关键能力维度缺少证据或检索结果不足以支撑匹配结论",
+        },
+        "output_requirements": {
+            "final_report": True,
+            "learning_plan": True,
+            "interview_tips": True,
+            "cover_letter": True,
+        },
+        "next_action": "build_retrieval_queries",
+    }
+
+    print("\n====== plan_career_analysis: 输出 execution_plan ======")
+    print(execution_plan)
+
+    return {
+        "execution_plan": execution_plan,
+        "current_node": "plan_career_analysis",
+    }
+
+
 @trace_node("build_retrieval_queries")
 def build_retrieval_queries(state: CareerAgentState):
+    execution_plan = state.get("execution_plan", {})
 
     prompt = BUILD_RETRIEVAL_QUERIES_PROMPT.format(
-        jd_analysis=json.dumps(state["jd_analysis"], ensure_ascii=False, indent=2)
+        execution_plan=execution_plan,
     )
 
     response = json_llm.invoke(prompt)
@@ -406,29 +476,29 @@ def analyze_jd(state: CareerAgentState):
     response = json_llm.invoke(prompt)
 
     try:
-        # jd_analysis = json.loads(response.content)
         raw_dict = json.loads(response.content)
         jd_analysis = JDAnalysis.model_validate(raw_dict)
+
     except (json.JSONDecodeError, ValidationError) as e:
         print("\n====== analyze_jd: 解析失败 ======")
         print(e)
         print(response.content)
+
         jd_analysis = JDAnalysis(
             role_title="",
-            required_skills=[],
-            preferred_skills=[],
-            frontend_skills=[],
-            backend_skills=[],
-            ai_skills=[],
-            infra_skills=[],
-            soft_skills=[],
+            role_category="other",
+            requirements=[],
             responsibilities=[],
+            background_requirements=[],
         )
-    # response = structured_jd_llm.invoke(prompt)
+
     print("\n====== analyze_jd: 输出 jd_analysis ======")
     print(jd_analysis)
 
-    return {"jd_analysis": jd_analysis.model_dump(), "current_node": "analyze_jd"}
+    return {
+        "jd_analysis": jd_analysis.model_dump(),
+        "current_node": "analyze_jd",
+    }
 
 
 @trace_node("extract_resume_profile")
@@ -717,6 +787,7 @@ def build_career_graph():
     graph.add_node("generate_learning_plan", generate_learning_plan)
     graph.add_node("generate_interview_tips", generate_interview_tips)
     graph.add_node("generate_cover_letter", generate_cover_letter)
+    graph.add_node("plan_career_analysis", plan_career_analysis)
     graph.add_node("build_retrieval_queries", build_retrieval_queries)
     graph.add_node("retrieve_resume_evidence", retrieve_resume_evidence)
 
@@ -726,7 +797,8 @@ def build_career_graph():
 
     graph.add_edge(START, "load_memory")
     graph.add_edge("load_memory", "analyze_jd")
-    graph.add_edge("analyze_jd", "build_retrieval_queries")
+    graph.add_edge("analyze_jd", "plan_career_analysis")
+    graph.add_edge("plan_career_analysis", "build_retrieval_queries")
     graph.add_edge("build_retrieval_queries", "retrieve_resume_evidence")
 
     graph.add_edge("retrieve_resume_evidence", "reflect_evidence")
@@ -786,6 +858,7 @@ def run_career_agent(
             "skill_evidence": [],
             "background_evidence": [],
             "query_plan": {},
+            "execution_plan": {},
             "reflection_result": {},
             "retry_evidence": [],
             "retry_count": 0,
