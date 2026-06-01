@@ -36,5 +36,15 @@ class ToolRegistry:
     def list_tools(self) -> list[ToolDefinition]:
         return list(self._tools.values())
 
+    def get_tool_summaries(self):
+        return [
+            {
+                "name": tool.name,
+                "tool_type": tool.tool_type,
+                "description": tool.description,
+            }
+            for tool in self.list_tools()
+        ]
+
 
 tool_registry = ToolRegistry()

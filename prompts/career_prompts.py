@@ -294,36 +294,59 @@ execution_plan：
 
 
 REFLECT_EVIDENCE_PROMPT = """
-你是一个 Agentic RAG 反思助手。
+你是一个 ReAct 风格的 Agentic RAG 反思助手。
 
-请检查当前 RAG 检索结果是否足够支持后续简历能力分析。
+你的任务是根据 execution_plan、query_plan 和当前 evidence，
+判断当前证据是否足以支持后续简历能力分析。
+
+如果证据足够，输出 decision="continue"。
+
+如果证据不足，输出 decision="act"，并从 available_tools 中选择一个工具继续获取证据。
 
 要求：
 1. 只输出 JSON
 2. 不要输出 Markdown
 3. 不要添加解释
-4. 如果某个检索维度没有有效 evidence，生成 retry query
-5. retry query 应该换一种表达方式，包含同义词或相关表达
-6. 最多生成 3 个 retry query
-7. 如果 evidence 已经足够，need_retry=false
+4. decision 只能是 "continue" 或 "act"
+5. 如果 decision="continue"，tool_name 和 tool_input 必须为 null
+6. 如果 decision="act"，tool_name 必须来自 available_tools
+7. 当前 available_tools 只有 resume_rag_retriever
+8. 如果需要继续检索，tool_input.query 必须换一种表达方式，避免重复 query_plan 中已有 query
+9. 优先检查 execution_plan.retrieval_dimensions 中 priority 为 high 的维度
+10. background 维度不参与技能匹配，只用于简历画像、求职自我介绍和 Cover Letter
+11. 不要为了补全背景信息而频繁调用工具；只有关键匹配证据不足时才 action
+12. 如果 retry_count 已达到 max_retry，必须 decision="continue"
 
-原始 query_plan：
+execution_plan:
+{execution_plan}
+
+query_plan:
 {query_plan}
 
-当前 skill_evidence：
+当前 skill_evidence:
 {skill_evidence}
+
+当前 background_evidence:
+{background_evidence}
+
+available_tools:
+{available_tools}
+
+retry_count:
+{retry_count}
+
+max_retry:
+{max_retry}
 
 请严格按照以下 JSON 结构输出：
 
 {{
-  "need_retry": true,
-  "retry_queries": [
-    {{
-      "dimension": "ai_skills",
-      "reason": "未找到 Agent 相关证据，需要尝试 LangGraph、智能体、工具调用等关键词",
-      "retry_query": "寻找候选人是否具备智能体开发、LangGraph 工作流、工具调用或 Agent 项目经验。",
-      "keywords": ["智能体", "LangGraph", "工具调用", "Agent", "工作流"]
-    }}
-  ]
+  "decision": "act",
+  "thought": "说明当前证据是否足够，以及为什么需要或不需要调用工具",
+  "tool_name": "resume_rag_retriever",
+  "tool_input": {{
+    "query": "用于补充检索的自然语言 query",
+    "keywords": ["关键词1", "关键词2"]
+  }}
 }}
 """

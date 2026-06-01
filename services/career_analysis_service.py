@@ -7,6 +7,7 @@ from database.repositories.agent_run_repository import (
     update_agent_run,
 )
 from agents.career_graph import career_graph
+from tools import tool_registry
 from utils.time import now_utc8
 
 
@@ -86,6 +87,8 @@ def execute_career_analysis_workflow(
     finally:
         db.close()
 
+    available_tools = tool_registry.get_tool_summaries()
+    print(f"\n=====available_tools======{available_tools}")
     result = career_graph.invoke(
         {
             "user_id": user_id,
@@ -104,7 +107,8 @@ def execute_career_analysis_workflow(
             "skill_evidence": [],
             "background_evidence": [],
             "query_plan": {},
-            "reflection_result": {},
+            "execution_plan": {},
+            "react_decision": {},
             "retry_evidence": [],
             "retry_count": 0,
             "max_retry": 1,
@@ -115,6 +119,7 @@ def execute_career_analysis_workflow(
             "confirmation_id": "",
             "confirmation_status": "",
             "confirmation_message": "",
+            "available_tools": available_tools,
         }
     )
 

@@ -23,12 +23,14 @@ from schemas.resume_schema import ResumeProfile
 from schemas.match_schema import MatchResult
 from schemas.query_schema import QueryPlan
 from schemas.reflection_schema import ReflectionResult
+from schemas.react_decision import ReactDecision
 from services.session_memory_service import SessionMemoryService
 from services.workflow_state_service import WorkflowStateService
 from services.confirmation_service import ConfirmationService
 
 from tools.rag_evidence_tool import retrieve_evidence_from_rag
 from tools.tool_executor import call_tool
+from tools.tool_registry import tool_registry
 
 from database.repositories.agent_run_repository import (
     create_agent_run,
@@ -71,7 +73,7 @@ class CareerAgentState(TypedDict, total=False):
     query_plan: dict[str, Any]
     execution_plan: dict[str, Any]
 
-    reflection_result: dict[str, Any]
+    react_decision: dict[str, Any]
     retry_evidence: list[dict[str, Any]]
     retry_count: int
     max_retry: int
@@ -84,6 +86,7 @@ class CareerAgentState(TypedDict, total=False):
     human_action: str
     confirmation_status: str
     confirmation_message: str
+    available_tools: list[dict[str, Any]]
 
 
 json_llm = ChatOpenAI(
@@ -169,31 +172,86 @@ def retrieve_resume_evidence(state: CareerAgentState):
 
 @trace_node("reflect_evidence")
 def reflect_evidence(state: CareerAgentState):
+    execution_plan = state.get("execution_plan", {})
+    query_plan = state.get("query_plan", {})
+    skill_evidence = state.get("skill_evidence", [])
+    background_evidence = state.get("background_evidence", [])
+    retry_count = state.get("retry_count", 0)
+    max_retry = state.get("max_retry", 1)
+    available_tools = state.get("available_tools", [])
+
     prompt = REFLECT_EVIDENCE_PROMPT.format(
-        query_plan=json.dumps(
-            state.get("query_plan", {}), ensure_ascii=False, indent=2
+        execution_plan=json.dumps(execution_plan, ensure_ascii=False, indent=2),
+        query_plan=json.dumps(query_plan, ensure_ascii=False, indent=2),
+        skill_evidence=json.dumps(skill_evidence, ensure_ascii=False, indent=2),
+        background_evidence=json.dumps(
+            background_evidence, ensure_ascii=False, indent=2
         ),
-        skill_evidence=json.dumps(
-            state.get("skill_evidence", []), ensure_ascii=False, indent=2
-        ),
+        available_tools=json.dumps(available_tools, ensure_ascii=False, indent=2),
+        retry_count=retry_count,
+        max_retry=max_retry,
     )
 
     response = json_llm.invoke(prompt)
 
     try:
         raw_dict = json.loads(response.content)
-        reflection_result = ReflectionResult.model_validate(raw_dict).model_dump()
+        react_decision = ReactDecision.model_validate(raw_dict).model_dump()
     except (json.JSONDecodeError, ValidationError) as e:
         print("\n====== reflect_evidence: 解析失败 ======")
         print(e)
         print(response.content)
 
-        reflection_result = {"need_retry": False, "retry_queries": []}
+        react_decision = {
+            "decision": "continue",
+            "thought": "反思结果解析失败，为避免无限循环，默认继续生成报告。",
+            "tool_name": None,
+            "tool_input": None,
+        }
 
-    print("\n====== reflect_evidence: 输出 reflection_result ======")
-    print(reflection_result)
+    print("\n====== reflect_evidence: 输出 react_decision ======")
+    print(react_decision)
 
-    return {"reflection_result": reflection_result, "current_node": "reflect_evidence"}
+    return {
+        "react_decision": react_decision,
+        "current_node": "reflect_evidence",
+    }
+
+
+@trace_node("execute_react_action")
+def execute_react_action(state: CareerAgentState):
+    react_decision = state.get("react_decision", {})
+
+    tool_name = react_decision.get("tool_name")
+    tool_input = react_decision.get("tool_input") or {}
+
+    if not tool_name:
+        return {
+            "current_node": "execute_react_action",
+        }
+
+    query = tool_input.get("query", "")
+    keyword_query = tool_input.get("keywords", [""])
+    final_query = f"{query}\n关键词：{keyword_query}"
+
+    evidence_list = call_tool(
+        tool_name=tool_name,
+        user_id=state["user_id"],
+        query=final_query,
+        workflow_id=state["workflow_id"],
+        step_id=state.get("_current_step_id"),
+    )
+
+    retry_count = state.get("retry_count", 0) + 1
+
+    return {
+        "retry_evidence": evidence_list,
+        "retry_added_count": len(evidence_list),
+        "rag_evidence": state.get("rag_evidence", []) + evidence_list,
+        "skill_evidence": state.get("skill_evidence", []) + evidence_list,
+        "retry_count": retry_count,
+        "current_node": "execute_react_action",
+    }
 
 
 @trace_node("retry_retrieve_evidence")
@@ -644,10 +702,16 @@ def route_by_score(state: CareerAgentState):
 
 
 def route_after_reflection(state: CareerAgentState):
-    reflection = state.get("reflection_result", {})
+    react_decision = state.get("react_decision", {})
+    retry_count = state.get("retry_count", 0)
+    max_retry = state.get("max_retry", 1)
 
-    if reflection.get("need_retry"):
-        return "retry_retrieve_evidence"
+    if (
+        react_decision.get("decision") == "act"
+        and retry_count < max_retry
+        and react_decision.get("tool_name")
+    ):
+        return "execute_react_action"
 
     return "extract_resume_profile"
 
@@ -807,6 +871,7 @@ def build_career_graph():
     graph.add_node("retrieve_resume_evidence", retrieve_resume_evidence)
 
     graph.add_node("reflect_evidence", reflect_evidence)
+    graph.add_node("execute_react_action", execute_react_action)
     graph.add_node("retry_retrieve_evidence", retry_retrieve_evidence)
     graph.add_node("create_confirmation", create_confirmation)
 
@@ -818,7 +883,7 @@ def build_career_graph():
 
     graph.add_edge("retrieve_resume_evidence", "reflect_evidence")
     graph.add_conditional_edges("reflect_evidence", route_after_reflection)
-    graph.add_edge("retry_retrieve_evidence", "extract_resume_profile")
+    graph.add_edge("execute_react_action", "reflect_evidence")
 
     graph.add_edge("extract_resume_profile", "match_job")
     graph.add_conditional_edges("match_job", route_by_score)
@@ -855,6 +920,8 @@ confirm_graph = build_confirm_graph()
 def run_career_agent(
     session_id: str, user_id: str, job_description: str, resume_text: str
 ):
+    available_tools = tool_registry.get_tool_summaries()
+    print(f"\n=====available_tools======{available_tools}")
     result = career_graph.invoke(
         {
             "user_id": user_id,
@@ -874,7 +941,7 @@ def run_career_agent(
             "background_evidence": [],
             "query_plan": {},
             "execution_plan": {},
-            "reflection_result": {},
+            "react_decision": {},
             "retry_evidence": [],
             "retry_count": 0,
             "max_retry": 1,
@@ -886,6 +953,7 @@ def run_career_agent(
             "human_action": "",
             "confirmation_status": "",
             "confirmation_message": "",
+            "available_tools": available_tools,
         }
     )
 
