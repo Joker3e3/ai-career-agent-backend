@@ -67,3 +67,22 @@ def update_agent_run(
     db.refresh(agent_run)
 
     return agent_run
+
+
+def list_agent_runs_by_user(
+    user_id: str,
+    limit: int = 50,
+):
+    db = SessionLocal()
+
+    try:
+        return (
+            db.query(AgentRun)
+            .filter(AgentRun.user_id == user_id)
+            .order_by(AgentRun.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+    finally:
+        db.close()

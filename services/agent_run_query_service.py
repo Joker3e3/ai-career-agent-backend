@@ -3,6 +3,7 @@ from fastapi import HTTPException
 from database.database import SessionLocal
 from database.repositories.agent_run_repository import (
     get_agent_run_by_workflow_id,
+    list_agent_runs_by_user,
 )
 from database.repositories.human_confirmation_repository import (
     get_latest_confirmation_by_workflow_id,
@@ -51,3 +52,21 @@ def get_agent_run_detail(workflow_id: str):
             }
         ),
     }
+
+
+def get_user_agent_runs(
+    user_id: str,
+    limit: int = 50
+):
+    runs = list_agent_runs_by_user(user_id, limit=limit)
+
+    return [
+        {
+            "workflow_id": run.workflow_id,
+            "status": run.status,
+            "input_summary": run.input_summary,
+            "created_at": run.created_at,
+            "updated_at": run.updated_at,
+        }
+        for run in runs
+    ]
