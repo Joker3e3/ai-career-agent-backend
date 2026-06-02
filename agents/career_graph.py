@@ -71,6 +71,9 @@ class CareerAgentState(TypedDict, total=False):
     interview_tips: str
     cover_letter: str
     memories: list[dict[str, Any]]
+    application_history: list[dict[str, Any]]
+    profile_summary: str
+    preference: str
     final_report: str
     skill_evidence: list[dict]
     background_evidence: list[dict]
@@ -689,31 +692,41 @@ def match_job(state: CareerAgentState):
 @trace_node("generate_learning_plan")
 def generate_learning_plan(state: CareerAgentState):
 
-    print("\n====== generate_learning_plan: 输入 state ======")
-    print(state)
+    profile_summary = state.get("profile_summary", "")
+    preference = state.get("preference", "")
     prompt = GENERATE_LEARNING_PLAN_PROMPT.format(
         jd_analysis=json.dumps(state["jd_analysis"], ensure_ascii=False),
         resume_profile=json.dumps(state["resume_profile"], ensure_ascii=False),
         match_result=json.dumps(state["match_result"], ensure_ascii=False),
-        memories=json.dumps(state["memories"], ensure_ascii=False),
+        application_history=json.dumps(
+            state["application_history"], ensure_ascii=False
+        ),
+        profile_summary=profile_summary,
+        preference=preference,
     )
 
-    # response = text_llm.invoke(prompt)
+    response = text_llm.invoke(prompt)
 
-    # print("\n====== generate_learning_plan: 输出 ======")
-    # print(response)
-    # return {"learning_plan": response.content}
-    return {"learning_plan": "", "current_node": "generate_learning_plan"}
+    print("\n====== generate_learning_plan: 输出 ======")
+    print(response)
+    return {"learning_plan": response.content, "current_node": "generate_learning_plan"}
 
 
 @trace_node("generate_interview_tips")
 def generate_interview_tips(state: CareerAgentState):
 
+    application_history = state.get("application_history", [])
+    profile_summary = state.get("profile_summary", "")
+    preference = state.get("preference", "")
     prompt = GENERATE_INTERVIEW_TIPS_PROMPT.format(
         jd_analysis=json.dumps(state["jd_analysis"], ensure_ascii=False),
         resume_profile=json.dumps(state["resume_profile"], ensure_ascii=False),
         match_result=json.dumps(state["match_result"], ensure_ascii=False),
-        memories=json.dumps(state["memories"], ensure_ascii=False),
+        application_history=json.dumps(
+            application_history, ensure_ascii=False, indent=2
+        ),
+        profile_summary=profile_summary,
+        preference=preference,
     )
 
     response = text_llm.invoke(prompt)
@@ -754,10 +767,18 @@ def route_after_reflection(state: CareerAgentState):
 
 @trace_node("generate_cover_letter")
 def generate_cover_letter(state: CareerAgentState):
+    application_history = state.get("application_history", [])
+    profile_summary = state.get("profile_summary", "")
+    preference = state.get("preference", "")
     prompt = GENERATE_COVER_LETTER_PROMPT.format(
         jd_analysis=json.dumps(state["jd_analysis"], ensure_ascii=False),
         resume_profile=json.dumps(state["resume_profile"], ensure_ascii=False),
         match_result=json.dumps(state["match_result"], ensure_ascii=False),
+        application_history=json.dumps(
+            application_history, ensure_ascii=False, indent=2
+        ),
+        profile_summary=profile_summary,
+        preference=preference,
     )
 
     response = text_llm.invoke(prompt)
@@ -768,92 +789,68 @@ def generate_cover_letter(state: CareerAgentState):
 # ============================================================
 @trace_node("generate_report")
 def generate_report(state: CareerAgentState):
-    report = f"""
-# AI 求职分析报告
+    report = f"# AI 求职分析报告\n\n"
 
-## 一、岗位名称
+    section_index = 1  # 动态编号
 
-{state["jd_analysis"].get("role_title", "")}
+    # 一、岗位名称
+    report += f"## {section_index}、岗位名称\n\n{state['jd_analysis'].get('role_title', '')}\n\n---\n"
+    section_index += 1
 
----
+    # 二、匹配评分
+    report += f"## {section_index}、匹配评分\n\n{state['match_result'].get('match_score', 0)}\n\n---\n"
+    section_index += 1
 
-## 二、匹配评分
+    # 已匹配技能
+    matched_skills = state["match_result"].get("matched_skills", [])
+    if matched_skills:
+        report += f"## {section_index}、已匹配技能\n\n"
+        for skill in matched_skills:
+            report += f"- {skill['skill']}\n  - 证据：{skill['evidence']}\n"
+        report += "\n---\n"
+        section_index += 1
 
-{state["match_result"].get("match_score", 0)}
+    # 缺失技能
+    missing_skills = state["match_result"].get("missing_skills", [])
+    if missing_skills:
+        report += f"## {section_index}、缺失技能\n\n"
+        for skill in missing_skills:
+            report += f"- {skill}\n"
+        report += "\n---\n"
+        section_index += 1
 
----
+    # 优势分析
+    strengths = state["match_result"].get("strengths", [])
+    if strengths:
+        report += f"## {section_index}、优势分析\n\n"
+        for item in strengths:
+            report += f"- {item}\n"
+        report += "\n---\n"
+        section_index += 1
 
-## 三、已匹配技能
+    # 风险分析
+    risks = state["match_result"].get("risks", [])
+    if risks:
+        report += f"## {section_index}、风险分析\n\n"
+        for item in risks:
+            report += f"- {item}\n"
+        report += "\n---\n"
+        section_index += 1
 
-"""
+    # 学习路线建议
+    learning_plan = state.get("learning_plan")
+    if learning_plan:
+        report += f"## {section_index}、学习路线建议\n\n{learning_plan}\n\n---\n"
+        section_index += 1
 
-    for skill in state["match_result"].get("matched_skills", []):
+    # 面试准备建议
+    interview_tips = state.get("interview_tips")
+    if interview_tips:
+        report += f"## {section_index}、面试准备建议\n\n{interview_tips}\n\n---\n"
+        section_index += 1
 
-        report += f"""
-- {skill["skill"]}
-  - 证据：{skill["evidence"]}
-"""
-
-    report += "\n---\n"
-
-    report += """
-## 四、缺失技能
-
-"""
-
-    for skill in state["match_result"].get("missing_skills", []):
-
-        report += f"- {skill}\n"
-
-    report += "\n---\n"
-
-    report += """
-## 五、优势分析
-
-"""
-
-    for item in state["match_result"].get("strengths", []):
-
-        report += f"- {item}\n"
-
-    report += "\n---\n"
-
-    report += """
-## 六、风险分析
-
-"""
-
-    for item in state["match_result"].get("risks", []):
-
-        report += f"- {item}\n"
-
-    report += "\n---\n"
-
-    if state.get("learning_plan"):
-
-        report += f"""
-## 七、学习路线建议
-
-{state["learning_plan"]}
-
----
-"""
-
-    if state.get("interview_tips"):
-
-        report += f"""
-## 八、面试准备建议
-
-{state["interview_tips"]}
-
----
-"""
-
-    report += f"""
-## 九、投递邮件草稿
-
-{state["cover_letter"]}
-"""
+    # 投递邮件草稿（必有）
+    report += f"## {section_index}、投递邮件草稿\n\n{state.get('cover_letter', '')}\n"
 
     return {"final_report": report, "current_node": "generate_report"}
 
