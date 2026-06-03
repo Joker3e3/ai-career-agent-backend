@@ -4,13 +4,6 @@ from services.career_analysis_service import execute_career_analysis_workflow
 
 
 @celery_app.task
-def test_task():
-    print("Celery task running")
-
-    return {"success": True}
-
-
-@celery_app.task
 def execute_career_analysis_task(
     workflow_id: str,
     user_id: str,

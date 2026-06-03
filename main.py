@@ -1,9 +1,11 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from tasks.career_analysis_task import test_task
+from config.logging import setup_logging
 from tools import register_all_tools
 
 load_dotenv()
@@ -15,6 +17,9 @@ from services.career_analysis_service import (
 )
 from schemas.confirm_schema import ConfirmRequest
 from routers.career_agent_router import router as career_agent_router
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -62,16 +67,6 @@ async def confirm_action(request: ConfirmRequest):
         confirmation_id=request.confirmation_id,
         human_action=request.action.value,
     )
-
-
-@app.get("/test-celery")
-async def test_celery():
-    async_result = test_task.delay()
-
-    return {
-        "message": "任务已提交",
-        "task_id": async_result.id,
-    }
 
 
 if __name__ == "__main__":

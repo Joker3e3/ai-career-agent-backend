@@ -7,6 +7,8 @@ import os
 
 load_dotenv()
 
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL")
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
@@ -46,3 +48,14 @@ def _resolve_redis_host() -> str:
 
 
 REDIS_HOST = _resolve_redis_host()
+
+
+RAG_SERVICE_URL = os.getenv("RAG_SERVICE_URL", "http://127.0.0.1:8000")
+
+USE_MCP_TOOLS = (
+    os.getenv(
+        "USE_MCP_TOOLS",
+        "false",
+    ).lower()
+    == "true"
+)

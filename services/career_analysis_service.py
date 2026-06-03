@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from constants.workflow_status import WorkflowStatus
@@ -10,6 +11,7 @@ from agents.career_graph import career_graph
 from tools import tool_registry
 from utils.time import now_utc8
 
+logger = logging.getLogger(__name__)
 
 def submit_career_analysis(
     user_id: str,
@@ -88,7 +90,7 @@ def execute_career_analysis_workflow(
         db.close()
 
     available_tools = tool_registry.get_tool_summaries()
-    print(f"\n=====available_tools======{available_tools}")
+    logger.info(f"\n=====available_tools======{available_tools}")
     result = career_graph.invoke(
         {
             "user_id": user_id,

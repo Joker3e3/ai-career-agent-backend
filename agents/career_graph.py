@@ -1,3 +1,4 @@
+import logging
 from typing import TypedDict, Any
 
 import json
@@ -52,6 +53,8 @@ from constants.workflow_status import ConfirmationStatus, WorkflowStatus
 from utils.time import now_utc8
 
 from agents.career.state_policy import build_checkpoint_state
+
+logger = logging.getLogger(__name__)
 
 session_memory_service = SessionMemoryService()
 workflow_state_service = WorkflowStateService()
@@ -146,13 +149,13 @@ def retrieve_resume_evidence(state: CareerAgentState):
                 all_evidence.append(evidence)
                 skill_evidence.append(evidence)
 
-    print("\n====== skill_evidence ======")
-    print(skill_evidence)
+    logger.debug("\n====== skill_evidence ======")
+    logger.debug(skill_evidence)
 
-    print("\n====== background_evidence ======")
-    print(background_evidence)
-    print("\n====== retrieve_resume_evidence: evidence ======")
-    print(all_evidence)
+    logger.debug("\n====== background_evidence ======")
+    logger.debug(background_evidence)
+    logger.debug("\n====== retrieve_resume_evidence: evidence ======")
+    logger.debug(all_evidence)
 
     return {
         "rag_evidence": all_evidence,
@@ -190,9 +193,9 @@ def reflect_evidence(state: CareerAgentState):
         raw_dict = json.loads(response.content)
         react_decision = ReactDecision.model_validate(raw_dict).model_dump()
     except (json.JSONDecodeError, ValidationError) as e:
-        print("\n====== reflect_evidence: 解析失败 ======")
-        print(e)
-        print(response.content)
+        logger.error("\n====== reflect_evidence: 解析失败 ======")
+        logger.error(e)
+        logger.error(response.content)
 
         react_decision = {
             "decision": "continue",
@@ -201,8 +204,8 @@ def reflect_evidence(state: CareerAgentState):
             "tool_input": None,
         }
 
-    print("\n====== reflect_evidence: 输出 react_decision ======")
-    print(react_decision)
+    logger.debug("\n====== reflect_evidence: 输出 react_decision ======")
+    logger.debug(react_decision)
 
     return {
         "react_decision": react_decision,
@@ -292,10 +295,10 @@ def retry_retrieve_evidence(state: CareerAgentState):
 
             retry_evidence.append(evidence)
 
-    print("\n====== retry_retrieve_evidence: 输出 retry_evidence ======")
-    print(retry_evidence)
+    logger.debug("\n====== retry_retrieve_evidence: 输出 retry_evidence ======")
+    logger.debug(retry_evidence)
 
-    print(
+    logger.debug(
         f"\n====== retry_retrieve_evidence: 重试次数 ====== {retry_count} ======  新增证据数 ====== {len(retry_evidence)} ======"
     )
     return {
@@ -334,8 +337,8 @@ def create_confirmation(state: CareerAgentState):
     checkpoint_state = build_checkpoint_state(updated_state)
     checkpoint_json = json.dumps(checkpoint_state, ensure_ascii=False)
 
-    print("full_state size:", len(full_state_json))
-    print("checkpoint_state size:", len(checkpoint_json))
+    logger.debug("full_state size:", len(full_state_json))
+    logger.debug("checkpoint_state size:", len(checkpoint_json))
 
     workflow_state_service.save_state(
         workflow_id=state["workflow_id"], state=checkpoint_state
@@ -378,12 +381,13 @@ def create_confirmation(state: CareerAgentState):
 
     except Exception:
         db.rollback()
+        logger.error("Error occurred while creating confirmation")
         raise
 
     finally:
         db.close()
 
-    print("create_confirmation")
+    logger.info("create_confirmation")
 
     return {
         "confirmation_id": confirmation_id,
@@ -462,8 +466,8 @@ def plan_career_analysis(state: CareerAgentState):
         "next_action": "build_retrieval_queries",
     }
 
-    print("\n====== plan_career_analysis: 输出 execution_plan ======")
-    print(execution_plan)
+    logger.debug("\n====== plan_career_analysis: 输出 execution_plan ======")
+    logger.debug(execution_plan)
 
     return {
         "execution_plan": execution_plan,
@@ -485,14 +489,14 @@ def build_retrieval_queries(state: CareerAgentState):
         raw_dict = json.loads(response.content)
         query_plan = QueryPlan.model_validate(raw_dict).model_dump()
     except (json.JSONDecodeError, ValidationError) as e:
-        print("\n====== build_retrieval_queries: 解析失败 ======")
-        print(e)
-        print(response.content)
+        logger.error("\n====== build_retrieval_queries: 解析失败 ======")
+        logger.error(e)
+        logger.error(response.content)
 
         query_plan = {"queries": []}
 
-    print("\n====== build_retrieval_queries: 输出 query_plan ======")
-    print(query_plan)
+    logger.debug("\n====== build_retrieval_queries: 输出 query_plan ======")
+    logger.debug(query_plan)
 
     return {"query_plan": query_plan, "current_node": "build_retrieval_queries"}
 
@@ -517,8 +521,8 @@ def load_memory(state: CareerAgentState):
 
     preference = long_term_memories.get("preference", "")
 
-    print("\n====== load_memory: 输出 long_term_memories ======")
-    print(long_term_memories)
+    logger.debug("\n====== load_memory: 输出 long_term_memories ======")
+    logger.debug(long_term_memories)
 
     return {
         "memories": application_history,
@@ -536,7 +540,7 @@ def load_memory(state: CareerAgentState):
 
 @trace_node("save_memory")
 def save_memory(state: CareerAgentState):
-    print("\n====== save_memory: 保存本次分析结果 ======")
+    logger.info("\n====== save_memory: 保存本次分析结果 ======")
     user_id = state["user_id"]
     workflow_id = state["workflow_id"]
 
@@ -592,9 +596,9 @@ def analyze_jd(state: CareerAgentState):
         jd_analysis = JDAnalysis.model_validate(raw_dict)
 
     except (json.JSONDecodeError, ValidationError) as e:
-        print("\n====== analyze_jd: 解析失败 ======")
-        print(e)
-        print(response.content)
+        logger.error("\n====== analyze_jd: 解析失败 ======")
+        logger.error(e)
+        logger.error(response.content)
 
         jd_analysis = JDAnalysis(
             role_title="",
@@ -604,8 +608,8 @@ def analyze_jd(state: CareerAgentState):
             background_requirements=[],
         )
 
-    print("\n====== analyze_jd: 输出 jd_analysis ======")
-    print(jd_analysis)
+    logger.debug("\n====== analyze_jd: 输出 jd_analysis ======")
+    logger.debug(jd_analysis)
 
     return {
         "jd_analysis": jd_analysis.model_dump(),
@@ -632,9 +636,9 @@ def extract_resume_profile(state: CareerAgentState):
         raw_dict = json.loads(response.content)
         resume_profile = ResumeProfile.model_validate(raw_dict)
     except (json.JSONDecodeError, ValidationError) as e:
-        print("\n====== extract_resume_profile: 解析失败 ======")
-        print(e)
-        print(response.content)
+        logger.error("\n====== extract_resume_profile: 解析失败 ======")
+        logger.error(e)
+        logger.error(response.content)
 
         resume_profile = ResumeProfile(
             frontend_skills=[],
@@ -646,8 +650,8 @@ def extract_resume_profile(state: CareerAgentState):
             summary="",
         )
 
-    print("\n====== extract_resume_profile: 输出 resume_profile ======")
-    print(resume_profile)
+    logger.debug("\n====== extract_resume_profile: 输出 resume_profile ======")
+    logger.debug(resume_profile)
 
     return {
         "resume_profile": resume_profile.model_dump(),
@@ -670,9 +674,9 @@ def match_job(state: CareerAgentState):
         match_result = MatchResult.model_validate(raw_dict).model_dump()
         match_result = filter_matched_skills_without_evidence(match_result)
     except (json.JSONDecodeError, ValidationError) as e:
-        print("\n====== match_job: 解析失败 ======")
-        print(e)
-        print(response.content)
+        logger.error("\n====== match_job: 解析失败 ======")
+        logger.error(e)
+        logger.error(response.content)
 
         match_result = MatchResult(
             match_score=0,
@@ -683,8 +687,8 @@ def match_job(state: CareerAgentState):
             summary="",
         )
 
-    print("\n====== match_job: 输出 match_result ======")
-    print(match_result)
+    logger.debug("\n====== match_job: 输出 match_result ======")
+    logger.debug(match_result)
 
     return {"match_result": match_result, "current_node": "match_job"}
 
@@ -707,8 +711,8 @@ def generate_learning_plan(state: CareerAgentState):
 
     response = text_llm.invoke(prompt)
 
-    print("\n====== generate_learning_plan: 输出 ======")
-    print(response)
+    logger.debug("\n====== generate_learning_plan: 输出 ======")
+    logger.debug(response)
     return {"learning_plan": response.content, "current_node": "generate_learning_plan"}
 
 
@@ -742,7 +746,7 @@ def route_by_score(state: CareerAgentState):
 
     score = state["match_result"]["match_score"]
 
-    print(f"\n====== 当前 match_score: {score} ======")
+    logger.debug(f"\n====== 当前 match_score: {score} ======")
 
     if score >= 80:
         return "generate_interview_tips"
@@ -873,7 +877,7 @@ def confirm_node(state: CareerAgentState):
         confirmation_status = "invalid"
         confirmation_message = "未知确认动作。"
 
-    print(
+    logger.info(
         f"\n====== confirm_node: 输出 confirmation_status ======{confirmation_status} =========== confirmation_message:{confirmation_message}"
     )
     return {
@@ -954,7 +958,7 @@ def run_career_agent(
     session_id: str, user_id: str, job_description: str, resume_text: str
 ):
     available_tools = tool_registry.get_tool_summaries()
-    print(f"\n=====available_tools======{available_tools}")
+    logger.info(f"\n=====available_tools======{available_tools}")
     result = career_graph.invoke(
         {
             "user_id": user_id,

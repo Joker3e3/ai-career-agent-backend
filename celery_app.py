@@ -1,5 +1,8 @@
 from celery import Celery
 
+from config.logging import setup_logging
+
+setup_logging()
 from config.settings import REDIS_HOST, REDIS_PORT
 from tools import register_all_tools
 
