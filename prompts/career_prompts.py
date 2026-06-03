@@ -231,7 +231,7 @@ GENERATE_INTERVIEW_TIPS_PROMPT = """
 {match_result}
 
 历史分析记录：
-{memories}
+{application_history}
 
 用户长期画像：
 {profile_summary}

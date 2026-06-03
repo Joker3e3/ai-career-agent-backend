@@ -13,7 +13,6 @@ load_dotenv()
 from agents.career_graph import run_career_agent, run_confirm_workflow
 from services.career_analysis_service import (
     submit_career_analysis,
-    execute_career_analysis_workflow,
 )
 from schemas.confirm_schema import ConfirmRequest
 from routers.career_agent_router import router as career_agent_router

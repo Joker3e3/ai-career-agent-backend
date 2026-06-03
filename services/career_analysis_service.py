@@ -90,39 +90,70 @@ def execute_career_analysis_workflow(
         db.close()
 
     available_tools = tool_registry.get_tool_summaries()
-    logger.info(f"\n=====available_tools======{available_tools}")
-    result = career_graph.invoke(
-        {
-            "user_id": user_id,
-            "session_id": session_id,
-            "job_description": job_description,
-            "resume_text": resume_text,
-            "jd_analysis": {},
-            "resume_profile": {},
-            "match_result": {},
-            "learning_plan": "",
-            "interview_tips": "",
-            "cover_letter": "",
-            "memories": [],
-            "final_report": "",
-            "rag_evidence": [],
-            "skill_evidence": [],
-            "background_evidence": [],
-            "query_plan": {},
-            "execution_plan": {},
-            "react_decision": {},
-            "retry_evidence": [],
-            "retry_count": 0,
-            "max_retry": 1,
-            "retry_added_count": 0,
-            "workflow_id": workflow_id,
-            "workflow_status": WorkflowStatus.RUNNING.value,
-            "current_node": "",
-            "confirmation_id": "",
-            "confirmation_status": "",
-            "confirmation_message": "",
-            "available_tools": available_tools,
-        }
-    )
+    logger.info("Available tools loaded: %s", available_tools)
+    try:
+        result = career_graph.invoke(
+            {
+                "user_id": user_id,
+                "session_id": session_id,
+                "job_description": job_description,
+                "resume_text": resume_text,
+                "jd_analysis": {},
+                "resume_profile": {},
+                "match_result": {},
+                "learning_plan": "",
+                "interview_tips": "",
+                "cover_letter": "",
+                "memories": [],
+                "final_report": "",
+                "rag_evidence": [],
+                "skill_evidence": [],
+                "background_evidence": [],
+                "query_plan": {},
+                "execution_plan": {},
+                "react_decision": {},
+                "retry_evidence": [],
+                "retry_count": 0,
+                "max_retry": 1,
+                "retry_added_count": 0,
+                "workflow_id": workflow_id,
+                "workflow_status": WorkflowStatus.RUNNING.value,
+                "current_node": "",
+                "confirmation_id": "",
+                "confirmation_status": "",
+                "confirmation_message": "",
+                "available_tools": available_tools,
+            }
+        )
 
-    return result
+        return result
+    except Exception as exc:
+        logger.exception(
+            "Career analysis workflow failed: workflow_id=%s",
+            workflow_id,
+        )
+
+        db = SessionLocal()
+
+        try:
+            update_agent_run(
+                db=db,
+                workflow_id=workflow_id,
+                status=WorkflowStatus.FAILED.value,
+                error_message=str(exc)[:3000],
+                completed_at=now_utc8(),
+            )
+
+            db.commit()
+
+        except Exception:
+            db.rollback()
+            logger.exception(
+                "Failed to update agent_run as failed: workflow_id=%s",
+                workflow_id,
+            )
+
+        finally:
+            db.close()
+
+        raise

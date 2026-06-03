@@ -23,7 +23,6 @@ from schemas.jd_schema import JDAnalysis
 from schemas.resume_schema import ResumeProfile
 from schemas.match_schema import MatchResult
 from schemas.query_schema import QueryPlan
-from schemas.reflection_schema import ReflectionResult
 from schemas.react_decision import ReactDecision
 from services.long_term_memory_service import (
     load_long_term_memories,
@@ -249,6 +248,9 @@ def execute_react_action(state: CareerAgentState):
     }
 
 
+# Deprecated:
+# 旧版固定 retry 节点，已被 ReAct-style execute_react_action 替代。
+# 当前 graph 不再连接该 node，仅保留用于对比历史实现。
 @trace_node("retry_retrieve_evidence")
 def retry_retrieve_evidence(state: CareerAgentState):
     reflection = state.get("reflection_result", {})
@@ -909,7 +911,6 @@ def build_career_graph():
 
     graph.add_node("reflect_evidence", reflect_evidence)
     graph.add_node("execute_react_action", execute_react_action)
-    graph.add_node("retry_retrieve_evidence", retry_retrieve_evidence)
     graph.add_node("create_confirmation", create_confirmation)
 
     graph.add_edge(START, "load_memory")
