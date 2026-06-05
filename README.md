@@ -457,3 +457,134 @@ curl -X POST http://127.0.0.1:8010/career_agent/confirm \
 - 将 RAG ingestion、向量库和检索服务纳入同一工程或提供独立部署说明。
 - 增加 Agent Evals，用固定 JD 和简历样本评估匹配结果稳定性。
 - 增加 Celery retry、失败落库、任务取消和 dead-letter 处理。
+
+# 部署指南（Deployment）
+
+## 1. 前置条件
+
+- Docker
+- Docker Compose
+- 已启动的 Resume RAG Service
+
+Career Agent 依赖外部 Resume RAG Service。启动本项目之前，请先启动 RAG 项目。
+
+## 2. 环境变量
+
+在项目根目录创建 `.env` 文件：
+
+```env
+DEEPSEEK_API_KEY=your_api_key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+
+RAG_SERVICE_URL=http://host.docker.internal:8000
+
+DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ai_career_agent
+
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+USE_MCP_TOOLS=False
+LOG_LEVEL=INFO
+```
+
+- `DEEPSEEK_API_KEY`：DeepSeek 兼容 Chat Model 的 API Key。
+- `DEEPSEEK_BASE_URL`：DeepSeek 兼容 OpenAI API 的 Base URL。
+- `DEEPSEEK_MODEL`：Career Agent 使用的模型名称。
+- `RAG_SERVICE_URL`：外部 Resume RAG Service 的 HTTP 地址。
+- `DATABASE_URL`：FastAPI API 和 Celery Worker 使用的 PostgreSQL 连接地址。
+- `REDIS_HOST`：Celery 和 Workflow State 服务使用的 Redis 主机名。
+- `REDIS_PORT`：Celery 和 Workflow State 服务使用的 Redis 端口。
+- `USE_MCP_TOOLS`：是否启用可选的 MCP 工具调用方式；保持 `False` 时，Career Agent 会直接通过 HTTP 调用 RAG Service。
+- `LOG_LEVEL`：应用日志级别。
+
+## 3. 构建并启动
+
+```bash
+docker compose up -d --build
+```
+
+该命令会启动：
+
+- `api`
+- `worker`
+- `postgres`
+- `redis`
+
+## 4. 初始化数据库
+
+首次启动后执行：
+
+```bash
+docker compose exec api uv run python -m database.init_db
+```
+
+数据库表初始化只需执行一次。
+
+## 5. 访问服务
+
+Career Agent API:
+
+```text
+http://localhost:8001
+```
+
+Swagger:
+
+```text
+http://localhost:8001/docs
+```
+
+## 6. 查看日志
+
+查看 API 日志：
+
+```bash
+docker compose logs -f api
+```
+
+查看 Worker 日志：
+
+```bash
+docker compose logs -f worker
+```
+
+## 7. 停止服务
+
+```bash
+docker compose down
+```
+
+该命令会保留 PostgreSQL 数据。
+
+## 8. 删除所有数据
+
+```bash
+docker compose down -v
+```
+
+该命令会删除 PostgreSQL Volume 和 Redis Volume。
+
+下次启动后需要重新初始化数据库。
+
+## 9. 部署架构
+
+```text
+Browser
+    │
+    ▼
+Frontend (Vue)
+localhost:5173
+    │
+    ▼
+Career Agent API
+localhost:8001
+    │
+    ├── PostgreSQL
+    ├── Redis
+    └── Celery Worker
+            │
+            ▼
+Resume RAG Service
+localhost:8000
+```
