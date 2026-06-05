@@ -1,0 +1,47 @@
+services:
+  api:
+    build: .
+    container_name: ai-career-agent-api
+    env_file:
+      - .env
+    ports:
+      - "8001:8000"
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped 
+    command: uv run uvicorn main:app --host 0.0.0.0 --port 8000
+
+  worker:
+    build: .
+    container_name: ai-career-agent-worker
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    command: uv run python -m celery -A celery_app worker --loglevel=info --pool=solo
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-career-agent-redis
+    expose:
+      - "6379"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai-career-agent-postgres
+    environment:
+      POSTGRES_DB: ai_career_agent
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
