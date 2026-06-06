@@ -350,6 +350,14 @@ REFLECT_EVIDENCE_PROMPT = """
 10. background 维度不参与技能匹配，只用于简历画像、求职自我介绍和 Cover Letter
 11. 不要为了补全背景信息而频繁调用工具；只有关键匹配证据不足时才 action
 12. 如果 retry_count 已达到 max_retry，必须 decision="continue"
+13. 判断 evidence 是否充分时，以 retrieval_dimensions 的能力维度为单位，不要以单个 keyword 为单位逐项苛刻补齐。
+14. 如果某个 high priority 维度已经有至少 1 条来自项目经历或工作经历的具体 evidence，能够支持后续报告中给出 grounded conclusion，则该维度可视为证据充足。
+15. 不要求每个 keyword 都有独立项目案例；keyword 只是辅助检索词，不是必须逐项验证的 checklist。
+16. 如果当前 evidence 已经能支持后续生成“优势、风险、建议”三类分析，不要继续调用工具。
+17. 只有当 high priority 维度完全没有具体项目/工作 evidence，或当前 evidence 明显无法支持 grounded conclusion 时，才 decision="act"。
+18. 如果某个 high priority 维度已有至少一条来自项目经历或工作经历的具体 evidence，足以支撑报告结论，则该维度可视为 evidence sufficient。技能列表提及但缺少项目描述，可视为弱 evidence，但如果项目中有相关描述，则可以继续判断为 sufficient。
+19. 如果 query 已经检索过，不要重复调用。
+20. 关键字只是辅助，不是必须每个都要独立 evidence。
 
 execution_plan:
 {execution_plan}
