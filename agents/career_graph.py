@@ -24,6 +24,7 @@ from schemas.resume_schema import ResumeProfile
 from schemas.match_schema import MatchResult
 from schemas.query_schema import QueryPlan
 from schemas.react_decision import ReactDecision
+from services.workflow_checkpoint_service import workflow_checkpoint_service
 from services.long_term_memory_service import (
     load_long_term_memories,
     save_application_history,
@@ -203,8 +204,8 @@ def reflect_evidence(state: CareerAgentState):
             "tool_input": None,
         }
 
-    logger.debug("\n====== reflect_evidence: 输出 react_decision ======")
-    logger.debug(react_decision)
+    logger.info("\n====== reflect_evidence: 输出 react_decision ======")
+    logger.info(react_decision)
 
     return {
         "react_decision": react_decision,
@@ -342,8 +343,11 @@ def create_confirmation(state: CareerAgentState):
     logger.debug("full_state size:", len(full_state_json))
     logger.debug("checkpoint_state size:", len(checkpoint_json))
 
-    workflow_state_service.save_state(
-        workflow_id=state["workflow_id"], state=checkpoint_state
+    workflow_checkpoint_service.save_checkpoint(
+        workflow_id=state["workflow_id"],
+        status="waiting_human_confirmation",
+        current_node="create_confirmation",
+        checkpoint=checkpoint_state,
     )
 
     db = SessionLocal()
@@ -610,8 +614,8 @@ def analyze_jd(state: CareerAgentState):
             background_requirements=[],
         )
 
-    logger.debug("\n====== analyze_jd: 输出 jd_analysis ======")
-    logger.debug(jd_analysis)
+    logger.info("\n====== analyze_jd: 输出 jd_analysis ======")
+    logger.info(jd_analysis)
 
     return {
         "jd_analysis": jd_analysis.model_dump(),
@@ -736,6 +740,8 @@ def generate_interview_tips(state: CareerAgentState):
     )
 
     response = text_llm.invoke(prompt)
+    logger.debug("\n====== generate_interview_tips: 输出 ======")
+    logger.debug(response)
 
     return {
         "interview_tips": response.content,
@@ -788,6 +794,8 @@ def generate_cover_letter(state: CareerAgentState):
     )
 
     response = text_llm.invoke(prompt)
+    logger.debug("\n====== generate_cover_letter: 输出 ======")
+    logger.debug(response)
 
     return {"cover_letter": response.content, "current_node": "generate_cover_letter"}
 
@@ -1004,7 +1012,7 @@ def run_career_agent(
 
 
 def run_confirm_workflow(workflow_id: str, confirmation_id: str, human_action: str):
-    saved_state = workflow_state_service.get_state(workflow_id)
+    saved_state = workflow_checkpoint_service.get_checkpoint(workflow_id)
 
     if not saved_state:
         return {"success": False, "message": "workflow 不存在"}
@@ -1039,7 +1047,10 @@ def run_confirm_workflow(workflow_id: str, confirmation_id: str, human_action: s
         },
     )
 
-    workflow_state_service.update_state(workflow_id=workflow_id, updates=result)
+    workflow_checkpoint_service.update_checkpoint(
+        workflow_id=workflow_id,
+        updates=result
+    )
 
     # 改PostSQL
     db = SessionLocal()

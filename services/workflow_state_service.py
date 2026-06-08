@@ -43,3 +43,5 @@ class WorkflowStateService:
     def delete_state(self, workflow_id: str):
         key = self._build_key(workflow_id)
         redis_client.delete(key)
+
+workflow_state_service = WorkflowStateService()
