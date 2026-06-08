@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import String, DateTime, Text, Integer
+from sqlalchemy import BigInteger, String, DateTime, Text, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.database import Base
@@ -58,6 +58,31 @@ class AgentStep(Base):
 
     duration_ms: Mapped[int | None] = mapped_column(
         Integer,
+        nullable=True,
+    )
+
+    input_tokens: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    output_tokens: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    total_tokens: Mapped[int | None] = mapped_column(
+        BigInteger,
+        nullable=True,
+    )
+
+    model_name: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    provider: Mapped[str | None] = mapped_column(
+        String(50),
         nullable=True,
     )
 

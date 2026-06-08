@@ -24,6 +24,7 @@ from schemas.resume_schema import ResumeProfile
 from schemas.match_schema import MatchResult
 from schemas.query_schema import QueryPlan
 from schemas.react_decision import ReactDecision
+from services import token_usage_service
 from services.workflow_checkpoint_service import workflow_checkpoint_service
 from services.long_term_memory_service import (
     load_long_term_memories,
@@ -188,6 +189,9 @@ def reflect_evidence(state: CareerAgentState):
     )
 
     response = json_llm.invoke(prompt)
+    
+    token_usage = token_usage_service.extract(response)
+    state["_current_token_usage"] = token_usage
 
     try:
         raw_dict = json.loads(response.content)
@@ -490,6 +494,8 @@ def build_retrieval_queries(state: CareerAgentState):
     )
 
     response = json_llm.invoke(prompt)
+    token_usage = token_usage_service.extract(response)
+    state["_current_token_usage"] = token_usage
 
     try:
         raw_dict = json.loads(response.content)
@@ -596,6 +602,8 @@ def analyze_jd(state: CareerAgentState):
     prompt = ANALYZE_JD_PROMPT.format(job_description=state["job_description"])
 
     response = json_llm.invoke(prompt)
+    token_usage = token_usage_service.extract(response)
+    state["_current_token_usage"] = token_usage
 
     try:
         raw_dict = json.loads(response.content)
@@ -637,6 +645,8 @@ def extract_resume_profile(state: CareerAgentState):
     )
 
     response = json_llm.invoke(prompt)
+    token_usage = token_usage_service.extract(response)
+    state["_current_token_usage"] = token_usage
 
     try:
         raw_dict = json.loads(response.content)
@@ -674,6 +684,8 @@ def match_job(state: CareerAgentState):
     )
 
     response = json_llm.invoke(prompt)
+    token_usage = token_usage_service.extract(response)
+    state["_current_token_usage"] = token_usage
 
     try:
         raw_dict = json.loads(response.content)
@@ -716,6 +728,8 @@ def generate_learning_plan(state: CareerAgentState):
     )
 
     response = text_llm.invoke(prompt)
+    token_usage = token_usage_service.extract(response)
+    state["_current_token_usage"] = token_usage
 
     logger.debug("\n====== generate_learning_plan: 输出 ======")
     logger.debug(response)
@@ -740,6 +754,9 @@ def generate_interview_tips(state: CareerAgentState):
     )
 
     response = text_llm.invoke(prompt)
+    token_usage = token_usage_service.extract(response)
+    state["_current_token_usage"] = token_usage
+
     logger.debug("\n====== generate_interview_tips: 输出 ======")
     logger.debug(response)
 
@@ -794,6 +811,8 @@ def generate_cover_letter(state: CareerAgentState):
     )
 
     response = text_llm.invoke(prompt)
+    token_usage = token_usage_service.extract(response)
+    state["_current_token_usage"] = token_usage
     logger.debug("\n====== generate_cover_letter: 输出 ======")
     logger.debug(response)
 

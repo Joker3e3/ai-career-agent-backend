@@ -41,6 +41,7 @@ def trace_node(node_name: str):
 
                 end_time = now_utc8()
                 duration_ms = int((end_time - start_time).total_seconds() * 1000)
+                token_usage = state.get("_current_token_usage") or {}
 
                 update_agent_step(
                     step_id=step.id,
@@ -48,6 +49,11 @@ def trace_node(node_name: str):
                     ended_at=end_time,
                     duration_ms=duration_ms,
                     output_summary=str(result)[:1000],
+                    input_tokens=token_usage.get("input_tokens"),
+                    output_tokens=token_usage.get("output_tokens"),
+                    total_tokens=token_usage.get("total_tokens"),
+                    model_name=token_usage.get("model_name"),
+                    provider=token_usage.get("provider"),
                 )
 
                 return result
@@ -67,7 +73,7 @@ def trace_node(node_name: str):
                 raise
             finally:
                 state.pop("_current_step_id", None)
-
+                state.pop("_current_token_usage", None)
         return wrapper
 
     return decorator

@@ -38,6 +38,11 @@ def get_workflow_trace(workflow_id: str):
                 "started_at": step.started_at,
                 "ended_at": step.ended_at,
                 "duration_ms": step.duration_ms,
+                "input_tokens": step.input_tokens,
+                "output_tokens": step.output_tokens,
+                "total_tokens": step.total_tokens,
+                "model_name": step.model_name,
+                # "provider": step.provider,
                 "tool_calls": [
                     {
                         "id": tool_call.id,

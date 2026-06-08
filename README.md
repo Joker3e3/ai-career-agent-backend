@@ -262,6 +262,12 @@ docker compose up -d --build
 docker compose exec api uv run python -m database.init_db
 ```
 
+执行数据库迁移：
+
+```bash
+docker compose exec api uv run python -m database.migrations.run_migrations
+```
+
 访问 API 文档：
 
 ```text
@@ -311,6 +317,12 @@ LOG_LEVEL=INFO
 
 ```bash
 uv run python -m database.init_db
+```
+
+执行数据库迁移：
+
+```bash
+uv run python -m database.migrations.run_migrations
 ```
 
 启动 API：
