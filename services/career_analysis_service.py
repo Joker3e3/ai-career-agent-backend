@@ -30,7 +30,7 @@ def submit_career_analysis(
             user_id=user_id,
             run_type="career_analysis",
             status=WorkflowStatus.QUEUED.value,
-            input_summary=job_description[:200],
+            input_summary=job_description,
             jd_text=job_description,
             match_score=None,
             started_at=None,
