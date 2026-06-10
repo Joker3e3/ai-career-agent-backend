@@ -16,7 +16,7 @@ class ConfirmationService:
         redis_client.set(
             self._build_key(confirmation_id),
             json.dumps(data, ensure_ascii=False),
-            ex=self.ttl_seconds,
+            # ex=self.ttl_seconds,
         )
 
     def get_confirmation(self, confirmation_id: str):
