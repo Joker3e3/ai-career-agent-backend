@@ -7,7 +7,7 @@ from services.redis_service import redis_client
 class ConfirmationService:
     def __init__(self):
         self.prefix = "career_agent:confirmation"
-        self.ttl_seconds = CONFIRMATION_TTL
+        # self.ttl_seconds = CONFIRMATION_TTL
 
     def _build_key(self, confirmation_id: str):
         return f"{self.prefix}:{confirmation_id}"

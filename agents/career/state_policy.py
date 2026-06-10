@@ -13,9 +13,15 @@ CHECKPOINT_FIELDS = {
     "confirmation_message",
 }
 
+CONTROL_FIELDS = {
+    "execution_plan",
+    "query_plan",
+    "react_decision",
+    "available_tools",
+}
+
 EPHEMERAL_FIELDS = {
     "jd_analysis",
-    "query_plan",
     "rag_evidence",
     "skill_evidence",
     "background_evidence",
@@ -36,6 +42,9 @@ RUNTIME_COUNTER_FIELDS = {
 
 MEMORY_FIELDS = {
     "memories",
+    "application_history",
+    "profile_summary",
+    "preference",
 }
 
 CONFIRMATION_FIELDS = {
@@ -50,6 +59,7 @@ def build_checkpoint_state(state: dict) -> dict:
         CHECKPOINT_FIELDS
         | RUNTIME_COUNTER_FIELDS
         | CONFIRMATION_FIELDS
+        | CONTROL_FIELDS
     )
 
     return {
