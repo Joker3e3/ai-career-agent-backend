@@ -367,7 +367,19 @@ http://127.0.0.1:8010/docs
 
 ## 9. 故障恢复（Recovery）
 
-为避免 Celery Worker 异常退出、容器重启等情况导致 Workflow 长时间停留在 `queued`、`running` 或 `processing` 状态，项目提供了手动恢复脚本。
+### 9.1 Workflow Checkpoint
+
+在关键节点保存 Workflow Checkpoint，支持中断恢复与状态追踪。
+
+Checkpoint 采用分层存储策略：
+
+- Recovery Checkpoint
+- Confirmation Checkpoint
+
+并基于字段生命周期进行状态瘦身，避免长期保存无效运行时数据。
+
+### 9.2 Workflow Recovery
+为避免 Celery Worker 异常退出、容器重启等情况导致 Workflow 长时间停留在 `queued`、`running` 状态，项目提供了手动恢复脚本。
 
 恢复脚本会：
 
@@ -385,7 +397,24 @@ docker compose exec api uv run python -m scripts.requeue_stuck_workflows
 
 执行后会列出待恢复任务，并要求人工确认后再进行重新投递。
 
+用于 Worker 异常退出、容器重启等场景下的任务恢复。
+
 > 当前版本采用“重新投递”策略，即 Workflow 将从起始节点重新执行。后续可结合 Checkpoint 机制实现从中断节点继续恢复执行（Checkpoint Resume）。
+
+### 9.3 Workflow Cancellation
+
+支持运行中任务取消。
+
+状态流转：
+
+queued
+→ cancelled
+
+running
+→ cancelling
+→ cancelled
+
+Worker 在节点边界检查 Workflow 状态，发现 cancelling 时主动终止执行并进入 cancelled 状态。
 
 ## 10. API / Usage Example
 
