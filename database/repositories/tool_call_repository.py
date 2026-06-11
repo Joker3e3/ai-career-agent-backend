@@ -68,3 +68,14 @@ def list_tool_calls_by_workflow_id(
 
     finally:
         db.close()
+
+def get_last_tool_call_by_workflow_id(
+    workflow_id: str,
+):
+    db = SessionLocal()
+
+    try:
+        return db.query(ToolCall).filter(ToolCall.workflow_id == workflow_id).order_by(ToolCall.started_at.desc()).first()
+
+    finally:
+        db.close()

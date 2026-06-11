@@ -3,10 +3,11 @@ from urllib.parse import urlparse
 
 import redis
 
-from constants.workflow_status import WorkflowStatus
+from constants.workflow_status import AgentStepStatus, WorkflowStatus
 from database.database import SessionLocal
 from database.models.agent_run import AgentRun
 from database.repositories.agent_step_repository import get_latest_running_agent_step, update_agent_step
+from database.repositories.tool_call_repository import get_last_tool_call_by_workflow_id, update_tool_call
 from tasks.career_analysis_task import execute_career_analysis_task
 from celery_app import CELERY_BROKER_URL, CELERY_QUEUE_NAME
 from utils.time import now_utc8
@@ -106,6 +107,15 @@ def run():
                 if step:
                     update_agent_step(
                         step_id=step.id,
+                        status="failed",
+                        error_message="Worker异常中断，任务已重新投递",
+                        ended_at=now_utc8(),
+                    )
+                
+                tool_call = get_last_tool_call_by_workflow_id(item.workflow_id)
+                if tool_call and tool_call.status == AgentStepStatus.RUNNING:
+                    update_tool_call(
+                        tool_call_id=tool_call.id,
                         status="failed",
                         error_message="Worker异常中断，任务已重新投递",
                         ended_at=now_utc8(),
