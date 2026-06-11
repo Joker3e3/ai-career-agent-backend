@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from services.agent_trace_service import get_workflow_trace
-from services.agent_run_query_service import get_agent_run_detail, get_user_agent_runs
+from services.agent_run_query_service import cancel_agent_run, get_agent_run_detail, get_user_agent_runs
 
 router = APIRouter()
 
@@ -25,3 +25,7 @@ async def list_runs(
         user_id=user_id,
         limit=limit,
     )
+
+@router.post("/career_agent/cancel/{workflow_id}")
+async def cancel_run(workflow_id: str):
+    return cancel_agent_run(workflow_id)

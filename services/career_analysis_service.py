@@ -5,9 +5,11 @@ from constants.workflow_status import WorkflowStatus
 from database.database import SessionLocal
 from database.repositories.agent_run_repository import (
     create_agent_run,
+    get_agent_run_by_workflow_id,
     update_agent_run,
 )
 from agents.career_graph import career_graph
+from exceptions.workflow_exceptions import WorkflowCancelledException
 from tools import tool_registry
 from utils.time import now_utc8
 
@@ -74,6 +76,15 @@ def execute_career_analysis_workflow(
     job_description: str,
     resume_text: str,
 ):
+    agent_run = get_agent_run_by_workflow_id(workflow_id=workflow_id)
+    if agent_run and agent_run.status == WorkflowStatus.CANCELLED:
+        logger.info("workflow already cancelled, skip execution: %s", workflow_id)
+        return {
+            "workflow_id": workflow_id,
+            "status": WorkflowStatus.CANCELLED.value,
+            "message": "workflow 已取消，跳过执行",
+        }
+    
     db = SessionLocal()
 
     try:
@@ -132,6 +143,41 @@ def execute_career_analysis_workflow(
         )
 
         return result
+    except WorkflowCancelledException as exc:
+        logger.info(
+            "Career analysis workflow cancelled: workflow_id=%s",
+            workflow_id,
+        )
+
+        db = SessionLocal()
+
+        try:
+            update_agent_run(
+                db=db,
+                workflow_id=workflow_id,
+                status=WorkflowStatus.CANCELLED.value,
+                error_message=str(exc)[:3000],
+                completed_at=now_utc8(),
+            )
+
+            db.commit()
+
+        except Exception:
+            db.rollback()
+            logger.exception(
+                "Failed to update agent_run as cancelled: workflow_id=%s",
+                workflow_id,
+            )
+            raise
+
+        finally:
+            db.close()
+
+        return {
+            "workflow_id": workflow_id,
+            "status": WorkflowStatus.CANCELLED.value,
+            "message": "workflow 已取消",
+        }
     except Exception as exc:
         logger.exception(
             "Career analysis workflow failed: workflow_id=%s",

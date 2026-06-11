@@ -9,6 +9,7 @@ from database.repositories.tool_call_repository import (
     create_tool_call,
     update_tool_call,
 )
+from services.workflow_runtime_service import check_workflow_cancelled
 from utils.time import now_utc8
 from agents.career.trace_summary import build_node_input_summary
 
@@ -21,6 +22,8 @@ def trace_node(node_name: str):
 
             if not workflow_id:
                 return func(state, *args, **kwargs)
+            
+            check_workflow_cancelled(workflow_id)
 
             start_time = now_utc8()
             input_summary = build_node_input_summary(

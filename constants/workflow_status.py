@@ -7,6 +7,8 @@ class WorkflowStatus(str, Enum):
     WAITING_HUMAN_CONFIRMATION = "waiting_human_confirmation"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLING = "cancelling"
+    CANCELLED = "cancelled"
 
 
 class ConfirmationStatus(str, Enum):

@@ -1,13 +1,19 @@
+import logging
+
 from fastapi import HTTPException
 
+from constants.workflow_status import WorkflowStatus
 from database.database import SessionLocal
 from database.repositories.agent_run_repository import (
     get_agent_run_by_workflow_id,
     list_agent_runs_by_user,
+    update_agent_run,
 )
 from database.repositories.human_confirmation_repository import (
     get_latest_confirmation_by_workflow_id,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def get_agent_run_detail(workflow_id: str):
@@ -71,3 +77,45 @@ def get_user_agent_runs(
         }
         for run in runs
     ]
+
+def cancel_agent_run(workflow_id: str):
+    agent_run = get_agent_run_by_workflow_id(
+        workflow_id=workflow_id,
+    )
+
+    if not agent_run:
+        raise HTTPException(
+            status_code=404,
+            detail="workflow 不存在",
+        )
+
+    if agent_run.status not in [WorkflowStatus.RUNNING, WorkflowStatus.QUEUED, WorkflowStatus.WAITING_HUMAN_CONFIRMATION]:
+        raise HTTPException(
+            status_code=400,
+            detail="只能取消 running 或 queued 或 waiting_human_confirmation 状态的 workflow",
+        )
+    db = SessionLocal()
+    
+    try:
+        if agent_run.status == WorkflowStatus.RUNNING:
+            next_status = WorkflowStatus.CANCELLING
+            update_agent_run(
+                db=db,
+                workflow_id=workflow_id,
+                status=WorkflowStatus.CANCELLING,
+            )
+        else:
+            next_status = WorkflowStatus.CANCELLED
+            update_agent_run(
+                db=db,
+                workflow_id=workflow_id,
+                status=WorkflowStatus.CANCELLED,
+            )
+        db.commit()
+    finally:
+        db.close()
+
+    return {
+        "workflow_id": workflow_id,
+        "status": next_status,
+    }
