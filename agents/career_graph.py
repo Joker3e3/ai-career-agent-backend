@@ -54,8 +54,6 @@ from database.database import SessionLocal
 from constants.workflow_status import ConfirmationStatus, WorkflowStatus
 from utils.time import now_utc8
 
-from agents.career.state_policy import build_checkpoint_state
-
 logger = logging.getLogger(__name__)
 
 session_memory_service = SessionMemoryService()
@@ -75,7 +73,6 @@ class CareerAgentState(TypedDict, total=False):
     learning_plan: str
     interview_tips: str
     cover_letter: str
-    memories: list[dict[str, Any]]
     application_history: list[dict[str, Any]]
     profile_summary: str
     preference: str
@@ -537,7 +534,6 @@ def load_memory(state: CareerAgentState):
     logger.debug(long_term_memories)
 
     return {
-        "memories": application_history,
         "application_history": application_history,
         "profile_summary": profile_summary,
         "preference": preference,

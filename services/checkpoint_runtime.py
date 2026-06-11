@@ -31,6 +31,7 @@ def save_workflow_checkpoint(
     checkpoint_state = build_checkpoint_state(
         updated_state,
         mode=mode,
+        current_node=current_node,
     )
 
     checkpoint_json = json.dumps(
