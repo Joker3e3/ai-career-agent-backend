@@ -116,6 +116,7 @@ def execute_career_analysis_workflow(
                 "retry_count": 0,
                 "max_retry": 1,
                 "retry_added_count": 0,
+                "checkpoint_version": 1,
                 "workflow_id": workflow_id,
                 "workflow_status": WorkflowStatus.RUNNING.value,
                 "current_node": "",

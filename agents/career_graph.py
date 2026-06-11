@@ -25,6 +25,7 @@ from schemas.match_schema import MatchResult
 from schemas.query_schema import QueryPlan
 from schemas.react_decision import ReactDecision
 from services import token_usage_service
+from services.checkpoint_runtime import save_workflow_checkpoint
 from services.workflow_checkpoint_service import workflow_checkpoint_service
 from services.long_term_memory_service import (
     load_long_term_memories,
@@ -99,6 +100,7 @@ class CareerAgentState(TypedDict, total=False):
     confirmation_status: str
     confirmation_message: str
     available_tools: list[dict[str, Any]]
+    checkpoint_version: int
 
 
 @trace_node("retrieve_resume_evidence")
@@ -157,13 +159,19 @@ def retrieve_resume_evidence(state: CareerAgentState):
     logger.debug(background_evidence)
     logger.debug("\n====== retrieve_resume_evidence: evidence ======")
     logger.debug(all_evidence)
-
-    return {
+    result = {
         "rag_evidence": all_evidence,
         "skill_evidence": skill_evidence,
         "background_evidence": background_evidence,
         "current_node": "retrieve_resume_evidence",
     }
+    save_workflow_checkpoint(
+        state={**state, **result},
+        current_node="retrieve_resume_evidence",
+        status="running",
+    )
+
+    return result
 
 
 @trace_node("reflect_evidence")
@@ -332,26 +340,12 @@ def create_confirmation(state: CareerAgentState):
             "user_action": "",
         },
     )
-
-    updated_state = {
-        **state,
-        "confirmation_id": confirmation_id,
-        "workflow_status": "waiting_human_confirmation",
-        "current_node": "create_confirmation",
-    }
-
-    full_state_json = json.dumps(updated_state, ensure_ascii=False)
-    checkpoint_state = build_checkpoint_state(updated_state)
-    checkpoint_json = json.dumps(checkpoint_state, ensure_ascii=False)
-
-    logger.debug("full_state size:", len(full_state_json))
-    logger.debug("checkpoint_state size:", len(checkpoint_json))
-
-    workflow_checkpoint_service.save_checkpoint(
-        workflow_id=state["workflow_id"],
-        status="waiting_human_confirmation",
+    save_workflow_checkpoint(
+        state=state,
         current_node="create_confirmation",
-        checkpoint=checkpoint_state,
+        status="waiting_human_confirmation",
+        mode="confirmation",
+        extra_state={"confirmation_id": confirmation_id},
     )
 
     db = SessionLocal()
@@ -509,8 +503,14 @@ def build_retrieval_queries(state: CareerAgentState):
 
     logger.debug("\n====== build_retrieval_queries: 输出 query_plan ======")
     logger.debug(query_plan)
+    result = {"query_plan": query_plan, "current_node": "build_retrieval_queries"}
+    save_workflow_checkpoint(
+        state={**state, **result},
+        current_node="build_retrieval_queries",
+        status="running",
+    )
 
-    return {"query_plan": query_plan, "current_node": "build_retrieval_queries"}
+    return result
 
 
 @trace_node("load_memory")
@@ -668,11 +668,17 @@ def extract_resume_profile(state: CareerAgentState):
 
     logger.debug("\n====== extract_resume_profile: 输出 resume_profile ======")
     logger.debug(resume_profile)
-
-    return {
+    result = {
         "resume_profile": resume_profile.model_dump(),
         "current_node": "extract_resume_profile",
     }
+    save_workflow_checkpoint(
+        state={**state, **result},
+        current_node="extract_resume_profile",
+        status="running",
+    )
+
+    return result
 
 
 @trace_node("match_job")
@@ -815,8 +821,14 @@ def generate_cover_letter(state: CareerAgentState):
     state["_current_token_usage"] = token_usage
     logger.debug("\n====== generate_cover_letter: 输出 ======")
     logger.debug(response)
+    result = {"cover_letter": response.content, "current_node": "generate_cover_letter"}
+    save_workflow_checkpoint(
+        state={**state, **result},
+        current_node="generate_cover_letter",
+        status="running",
+    )
 
-    return {"cover_letter": response.content, "current_node": "generate_cover_letter"}
+    return result
 
 
 # ============================================================
@@ -955,6 +967,8 @@ def build_career_graph():
     graph.add_edge("generate_learning_plan", "generate_cover_letter")
     graph.add_edge("generate_interview_tips", "generate_cover_letter")
     graph.add_edge("generate_cover_letter", "generate_report")
+
+    # graph.add_edge("match_job", "generate_report")
     graph.add_edge("generate_report", "save_memory")
     graph.add_edge("save_memory", "create_confirmation")
     graph.add_edge("create_confirmation", END)

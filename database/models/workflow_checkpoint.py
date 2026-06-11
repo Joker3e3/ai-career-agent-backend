@@ -31,6 +31,12 @@ class WorkflowCheckpoint(Base):
         nullable=False,
     )
 
+    checkpoint_version = Column(
+        Integer,
+        nullable=False,
+        default=1,
+    )
+
     created_at = Column(
         DateTime,
         default=now_utc8,

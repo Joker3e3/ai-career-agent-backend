@@ -1,66 +1,84 @@
 # 把 career_agent 的 state 进行分层存储
-CHECKPOINT_FIELDS = {
+ALWAYS_KEEP_FIELDS = {
     "workflow_id",
     "workflow_status",
     "current_node",
+    "checkpoint_version",
     "user_id",
     "session_id",
+}
+
+RECOVERY_KEEP_FIELDS = {
     "job_description",
     "resume_text",
-    "final_report",
-    "confirmation_id",
-    "confirmation_status",
-    "confirmation_message",
-}
 
-CONTROL_FIELDS = {
+    "jd_analysis",
     "execution_plan",
     "query_plan",
-    "react_decision",
-    "available_tools",
-}
 
-EPHEMERAL_FIELDS = {
-    "jd_analysis",
-    "rag_evidence",
     "skill_evidence",
     "background_evidence",
-    "reflection_result",
-    "retry_evidence",
+    "rag_evidence",
+
+    "react_decision",
+    "retry_count",
+    "max_retry",
+
     "resume_profile",
     "match_result",
+
     "learning_plan",
     "interview_tips",
     "cover_letter",
-}
 
-RUNTIME_COUNTER_FIELDS = {
-    "retry_count",
-    "max_retry",
-    "retry_added_count",
-}
+    "final_report",
 
-MEMORY_FIELDS = {
-    "memories",
     "application_history",
     "profile_summary",
     "preference",
+
+    "available_tools",
 }
 
-CONFIRMATION_FIELDS = {
+CONFIRMATION_ONLY_FIELDS = {
     "confirmation_id",
     "human_action",
     "confirmation_status",
     "confirmation_message",
 }
 
-def build_checkpoint_state(state: dict) -> dict:
-    checkpoint_keys = (
-        CHECKPOINT_FIELDS
-        | RUNTIME_COUNTER_FIELDS
-        | CONFIRMATION_FIELDS
-        | CONTROL_FIELDS
-    )
+RUNTIME_ONLY_FIELDS = {
+    "_current_step_id",
+    "_current_token_usage",
+}
+
+UNCERTAIN_FIELDS = {
+    "memories",
+    "retry_evidence",
+    "retry_added_count",
+    "reflection_result",
+}
+
+
+CHECKPOINT_POLICIES = {
+    "recovery": (
+        ALWAYS_KEEP_FIELDS
+        | RECOVERY_KEEP_FIELDS
+        | CONFIRMATION_ONLY_FIELDS
+    ),
+    "confirmation": (
+        ALWAYS_KEEP_FIELDS
+        | RECOVERY_KEEP_FIELDS
+        | CONFIRMATION_ONLY_FIELDS
+    ),
+}
+
+
+def build_checkpoint_state(state: dict, mode: str = "recovery") -> dict:
+    checkpoint_keys = CHECKPOINT_POLICIES.get(mode)
+
+    if checkpoint_keys is None:
+        raise ValueError(f"Unsupported checkpoint mode: {mode}")
 
     return {
         key: state.get(key)

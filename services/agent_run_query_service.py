@@ -31,6 +31,7 @@ def get_agent_run_detail(workflow_id: str):
         "user_id": agent_run.user_id,
         "run_type": agent_run.run_type,
         "status": agent_run.status,
+        "jd_text": agent_run.jd_text,
         "input_summary": agent_run.input_summary,
         "match_score": agent_run.match_score,
         "final_report": agent_run.final_report,
