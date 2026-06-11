@@ -85,3 +85,24 @@ def list_agent_steps_by_workflow_id(
 
     finally:
         db.close()
+
+def get_latest_running_agent_step(
+    workflow_id: str,
+):
+    db = SessionLocal()
+
+    try:
+        return (
+            db.query(AgentStep)
+            .filter(
+                AgentStep.workflow_id == workflow_id,
+                AgentStep.status == "running",
+            )
+            .order_by(
+                AgentStep.step_order.desc(),
+            )
+            .first()
+        )
+
+    finally:
+        db.close()

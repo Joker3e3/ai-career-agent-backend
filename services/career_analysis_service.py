@@ -18,6 +18,7 @@ def submit_career_analysis(
     session_id: str,
     job_description: str,
     resume_text: str,
+    checkpoint_version: int = 1,
 ):
     workflow_id = f"workflow_{uuid.uuid4()}"
 
@@ -34,6 +35,9 @@ def submit_career_analysis(
             jd_text=job_description,
             match_score=None,
             started_at=None,
+            session_id=session_id,
+            resume_text=resume_text,
+            checkpoint_version=checkpoint_version,
         )
 
         db.commit()

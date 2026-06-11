@@ -41,6 +41,22 @@ class AgentRun(Base):
 
     jd_text: Mapped[str] = mapped_column(Text)
 
+    session_id: Mapped[str | None] = mapped_column(
+        String(100), 
+        nullable=True
+    )
+
+    resume_text: Mapped[str] = mapped_column(
+        Text,
+        default=""
+    )
+
+    checkpoint_version: Mapped[int] = mapped_column(
+        Integer, 
+        nullable=False, 
+        default=1
+    )
+
     match_score: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,

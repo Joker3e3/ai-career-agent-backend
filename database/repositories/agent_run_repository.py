@@ -17,6 +17,9 @@ def create_agent_run(
     match_score: int | None,
     final_report: str | None = None,
     started_at: datetime | None = None,
+    session_id: str | None = None,
+    resume_text: str | None = None,
+    checkpoint_version: int = 1,
 ):
     agent_run = AgentRun(
         workflow_id=workflow_id,
@@ -28,6 +31,9 @@ def create_agent_run(
         match_score=match_score,
         final_report=final_report,
         started_at=started_at,
+        session_id=session_id,
+        resume_text=resume_text,
+        checkpoint_version=checkpoint_version
     )
 
     db.add(agent_run)
