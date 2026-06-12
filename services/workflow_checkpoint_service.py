@@ -16,7 +16,7 @@ class WorkflowCheckpointService:
         用于短期快速恢复 workflow state。
 
     PostgreSQL:
-        用于长期保存 human confirmation 阶段需要恢复的 checkpoint，
+        用于长期保存 checkpoint，
         避免 Redis TTL 过期后无法继续确认。
     """
 

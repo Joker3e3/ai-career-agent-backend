@@ -2,6 +2,7 @@ import json
 import logging
 
 from agents.career.state_policy import build_checkpoint_state
+from constants.workflow_status import CheckpointMode, WorkflowStatus
 from services.workflow_checkpoint_service import (
     workflow_checkpoint_service,
 )
@@ -12,8 +13,8 @@ logger = logging.getLogger(__name__)
 def save_workflow_checkpoint(
     state: dict,
     current_node: str,
-    status: str = "running",
-    mode: str = "recovery",
+    status: str = WorkflowStatus.RUNNING,
+    mode: str = CheckpointMode.RECOVERY,
     extra_state: dict | None = None,
 ):
     updated_state = {
@@ -33,6 +34,12 @@ def save_workflow_checkpoint(
         mode=mode,
         current_node=current_node,
     )
+
+    checkpoint_state = {
+        **checkpoint_state,
+        "current_node": current_node,
+        "checkpoint_mode": mode,
+    }
 
     checkpoint_json = json.dumps(
         checkpoint_state,

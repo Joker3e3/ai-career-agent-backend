@@ -1,19 +1,119 @@
 import logging
 import uuid
 
-from constants.workflow_status import WorkflowStatus
+from constants.workflow_status import CheckpointMode, WorkflowStatus
 from database.database import SessionLocal
 from database.repositories.agent_run_repository import (
     create_agent_run,
     get_agent_run_by_workflow_id,
     update_agent_run,
 )
-from agents.career_graph import career_graph
+from agents.career_graph import RESUME_NEXT_NODE, career_graph
 from exceptions.workflow_exceptions import WorkflowCancelledException
+from services.workflow_checkpoint_service import workflow_checkpoint_service
 from tools import tool_registry
 from utils.time import now_utc8
 
 logger = logging.getLogger(__name__)
+
+def build_initial_state(
+    workflow_id: str,
+    user_id: str,
+    session_id: str,
+    job_description: str,
+    resume_text: str,
+    available_tools: list[dict],
+) -> dict:
+    """
+    构建职业分析工作流的初始状态
+    """
+    return {
+        "user_id": user_id,
+        "session_id": session_id,
+        "job_description": job_description,
+        "resume_text": resume_text,
+        "jd_analysis": {},
+        "resume_profile": {},
+        "match_result": {},
+        "learning_plan": "",
+        "interview_tips": "",
+        "cover_letter": "",
+        "memories": [],
+        "final_report": "",
+        "rag_evidence": [],
+        "skill_evidence": [],
+        "background_evidence": [],
+        "query_plan": {},
+        "execution_plan": {},
+        "react_decision": {},
+        "retry_evidence": [],
+        "retry_count": 0,
+        "max_retry": 1,
+        "retry_added_count": 0,
+        "checkpoint_version": 1,
+        "workflow_id": workflow_id,
+        "workflow_status": WorkflowStatus.RUNNING.value,
+        "current_node": "",
+        "confirmation_id": "",
+        "confirmation_status": "",
+        "confirmation_message": "",
+        "available_tools": available_tools,
+    }
+
+def build_initial_or_resume_state(
+    workflow_id: str,
+    user_id: str,
+    session_id: str,
+    job_description: str,
+    resume_text: str,
+    available_tools: list[dict],
+) -> dict:
+    """
+    构建职业分析工作流的初始状态或从checkpoint恢复状态
+    """
+    checkpoint = workflow_checkpoint_service.get_checkpoint(workflow_id)
+
+    if not checkpoint:
+        return build_initial_state(
+            workflow_id=workflow_id,
+            user_id=user_id,
+            session_id=session_id,
+            job_description=job_description,
+            resume_text=resume_text,
+            available_tools=available_tools,
+        )
+
+    checkpoint_mode = checkpoint.get("checkpoint_mode", CheckpointMode.RECOVERY)
+    if checkpoint_mode == CheckpointMode.CONFIRMATION:
+        return {
+            **checkpoint,
+            "resume_skip_invoke": True,
+        }
+
+    current_node = checkpoint.get("current_node")
+
+    resume_from_node = RESUME_NEXT_NODE.get(current_node)
+
+    if resume_from_node is None:
+        raise ValueError(
+            f"Unsupported checkpoint node: {current_node}"
+        )
+
+    logger.info("\n====== route_resume: 从检查点恢复workflow ====== workflow_id=%s, current_node=%s, resume_from_node=%s",
+        workflow_id, current_node, resume_from_node
+    )
+
+    return {
+        **checkpoint,
+        "workflow_id": workflow_id,
+        "user_id": user_id,
+        "session_id": session_id,
+        "job_description": job_description,
+        "resume_text": resume_text,
+        "available_tools": available_tools,
+        "workflow_status": WorkflowStatus.RUNNING.value,
+        "resume_from_node": resume_from_node,
+    }
 
 def submit_career_analysis(
     user_id: str,
@@ -106,41 +206,21 @@ def execute_career_analysis_workflow(
 
     available_tools = tool_registry.get_tool_summaries()
     logger.info("Available tools loaded: %s", available_tools)
+    initial_state = build_initial_or_resume_state(
+        workflow_id=workflow_id,
+        user_id=user_id,
+        session_id=session_id,
+        job_description=job_description,
+        resume_text=resume_text,
+        available_tools=available_tools,
+    )
+
+    # 如果状态来自checkpoint且当前节点是create_confirmation，则直接返回状态，不执行workflow
+    if initial_state.get("resume_skip_invoke"):
+        return initial_state
+    
     try:
-        result = career_graph.invoke(
-            {
-                "user_id": user_id,
-                "session_id": session_id,
-                "job_description": job_description,
-                "resume_text": resume_text,
-                "jd_analysis": {},
-                "resume_profile": {},
-                "match_result": {},
-                "learning_plan": "",
-                "interview_tips": "",
-                "cover_letter": "",
-                "memories": [],
-                "final_report": "",
-                "rag_evidence": [],
-                "skill_evidence": [],
-                "background_evidence": [],
-                "query_plan": {},
-                "execution_plan": {},
-                "react_decision": {},
-                "retry_evidence": [],
-                "retry_count": 0,
-                "max_retry": 1,
-                "retry_added_count": 0,
-                "checkpoint_version": 1,
-                "workflow_id": workflow_id,
-                "workflow_status": WorkflowStatus.RUNNING.value,
-                "current_node": "",
-                "confirmation_id": "",
-                "confirmation_status": "",
-                "confirmation_message": "",
-                "available_tools": available_tools,
-            }
-        )
+        result = career_graph.invoke(initial_state)
 
         return result
     except WorkflowCancelledException as exc:

@@ -1,4 +1,7 @@
 # 把 career_agent 的 state 进行分层存储
+from constants.workflow_status import CheckpointMode
+
+
 ALWAYS_KEEP_FIELDS = {
     "workflow_id",
     "workflow_status",
@@ -128,7 +131,7 @@ def should_drop_by_lifecycle(key: str, current_node: str) -> bool:
 
     return node_index > drop_index
 
-def build_checkpoint_state(state: dict, current_node: str, mode: str = "recovery") -> dict:
+def build_checkpoint_state(state: dict, current_node: str, mode: str = CheckpointMode.RECOVERY) -> dict:
     checkpoint_keys = CHECKPOINT_POLICIES.get(mode)
 
     if checkpoint_keys is None:

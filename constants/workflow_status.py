@@ -27,3 +27,8 @@ class AgentStepStatus(str, Enum):
     RUNNING = "running"
     SUCCESS = "success"
     FAILED = "failed"
+
+class CheckpointMode(str, Enum):
+    RECOVERY = "recovery"
+    CONFIRMATION = "confirmation"
+    

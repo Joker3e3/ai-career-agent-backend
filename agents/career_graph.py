@@ -51,7 +51,7 @@ from database.repositories.human_confirmation_repository import (
 )
 from database.database import SessionLocal
 
-from constants.workflow_status import ConfirmationStatus, WorkflowStatus
+from constants.workflow_status import CheckpointMode, ConfirmationStatus, WorkflowStatus
 from utils.time import now_utc8
 
 logger = logging.getLogger(__name__)
@@ -98,6 +98,7 @@ class CareerAgentState(TypedDict, total=False):
     confirmation_message: str
     available_tools: list[dict[str, Any]]
     checkpoint_version: int
+    resume_from_node: str
 
 
 @trace_node("retrieve_resume_evidence")
@@ -165,7 +166,8 @@ def retrieve_resume_evidence(state: CareerAgentState):
     save_workflow_checkpoint(
         state={**state, **result},
         current_node="retrieve_resume_evidence",
-        status="running",
+        status=WorkflowStatus.RUNNING,
+        mode=CheckpointMode.RECOVERY,
     )
 
     return result
@@ -340,8 +342,8 @@ def create_confirmation(state: CareerAgentState):
     save_workflow_checkpoint(
         state=state,
         current_node="create_confirmation",
-        status="waiting_human_confirmation",
-        mode="confirmation",
+        status=WorkflowStatus.WAITING_HUMAN_CONFIRMATION,
+        mode=CheckpointMode.CONFIRMATION,
         extra_state={"confirmation_id": confirmation_id},
     )
 
@@ -392,7 +394,7 @@ def create_confirmation(state: CareerAgentState):
 
     return {
         "confirmation_id": confirmation_id,
-        "workflow_status": "waiting_human_confirmation",
+        "workflow_status": WorkflowStatus.WAITING_HUMAN_CONFIRMATION,
         "current_node": "create_confirmation",
     }
 
@@ -504,7 +506,8 @@ def build_retrieval_queries(state: CareerAgentState):
     save_workflow_checkpoint(
         state={**state, **result},
         current_node="build_retrieval_queries",
-        status="running",
+        status=WorkflowStatus.RUNNING,
+        mode=CheckpointMode.RECOVERY,
     )
 
     return result
@@ -671,7 +674,8 @@ def extract_resume_profile(state: CareerAgentState):
     save_workflow_checkpoint(
         state={**state, **result},
         current_node="extract_resume_profile",
-        status="running",
+        status=WorkflowStatus.RUNNING,
+        mode=CheckpointMode.RECOVERY,
     )
 
     return result
@@ -821,7 +825,8 @@ def generate_cover_letter(state: CareerAgentState):
     save_workflow_checkpoint(
         state={**state, **result},
         current_node="generate_cover_letter",
-        status="running",
+        status=WorkflowStatus.RUNNING,
+        mode=CheckpointMode.RECOVERY,
     )
 
     return result
@@ -921,10 +926,30 @@ def confirm_node(state: CareerAgentState):
         "human_action": action,
         "confirmation_status": confirmation_status,
         "confirmation_message": confirmation_message,
-        "workflow_status": "completed",
+        "workflow_status": WorkflowStatus.COMPLETED,
         "current_node": "confirm_node",
     }
 
+def route_resume(state: CareerAgentState):
+    resume_from_node = state.get("resume_from_node")
+    logger.info(f"\n====== route_resume: 检查是否存在检查点 ======{resume_from_node} ======")
+    return state
+
+def route_by_resume_node(state: CareerAgentState):
+    resume_from_node = state.get("resume_from_node")
+
+    if resume_from_node:
+        return resume_from_node
+
+    return "load_memory"
+
+RESUME_NEXT_NODE = {
+    "build_retrieval_queries": "retrieve_resume_evidence",
+    "retrieve_resume_evidence": "reflect_evidence",
+    "extract_resume_profile": "match_job",
+    "generate_cover_letter": "generate_report",
+    "create_confirmation": None,
+}
 
 # ===========================================================
 def build_career_graph():
@@ -948,7 +973,12 @@ def build_career_graph():
     graph.add_node("execute_react_action", execute_react_action)
     graph.add_node("create_confirmation", create_confirmation)
 
-    graph.add_edge(START, "load_memory")
+    # 重投时从checkpoint恢复
+    graph.add_node("route_resume", route_resume)
+
+    # graph.add_edge(START, "load_memory")
+    graph.add_edge(START, "route_resume")
+    graph.add_conditional_edges("route_resume",route_by_resume_node)
     graph.add_edge("load_memory", "analyze_jd")
     graph.add_edge("analyze_jd", "plan_career_analysis")
     graph.add_edge("plan_career_analysis", "build_retrieval_queries")
