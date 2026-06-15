@@ -1,5 +1,6 @@
 import logging
 import uuid
+import json
 
 from constants.workflow_status import CheckpointMode, WorkflowStatus
 from database.database import SessionLocal
@@ -23,6 +24,8 @@ def build_initial_state(
     job_description: str,
     resume_text: str,
     available_tools: list[dict],
+    candidate_id: str,
+    resume_id: str,
 ) -> dict:
     """
     构建职业分析工作流的初始状态
@@ -32,6 +35,8 @@ def build_initial_state(
         "session_id": session_id,
         "job_description": job_description,
         "resume_text": resume_text,
+        "candidate_id": candidate_id,
+        "resume_id": resume_id,
         "jd_analysis": {},
         "resume_profile": {},
         "match_result": {},
@@ -67,6 +72,8 @@ def build_initial_or_resume_state(
     job_description: str,
     resume_text: str,
     available_tools: list[dict],
+    candidate_id: str,
+    resume_id: str,
 ) -> dict:
     """
     构建职业分析工作流的初始状态或从checkpoint恢复状态
@@ -81,6 +88,8 @@ def build_initial_or_resume_state(
             job_description=job_description,
             resume_text=resume_text,
             available_tools=available_tools,
+            candidate_id=candidate_id,
+            resume_id=resume_id,
         )
 
     checkpoint_mode = checkpoint.get("checkpoint_mode", CheckpointMode.RECOVERY)
@@ -113,17 +122,29 @@ def build_initial_or_resume_state(
         "available_tools": available_tools,
         "workflow_status": WorkflowStatus.RUNNING.value,
         "resume_from_node": resume_from_node,
+        "candidate_id": candidate_id,
+        "resume_id": resume_id,
     }
 
 def submit_career_analysis(
     user_id: str,
     session_id: str,
+    candidate_id: str,
+    resume_id: str,
     job_description: str,
     resume_text: str,
     checkpoint_version: int = 1,
 ):
     workflow_id = f"workflow_{uuid.uuid4()}"
 
+    input_summary = json.dumps(
+        {
+            "candidate_id": candidate_id,
+            "resume_id": resume_id,
+            "job_description_preview": job_description[:300],
+        },
+        ensure_ascii=False,
+    )
     db = SessionLocal()
 
     try:
@@ -133,7 +154,7 @@ def submit_career_analysis(
             user_id=user_id,
             run_type="career_analysis",
             status=WorkflowStatus.QUEUED.value,
-            input_summary=job_description,
+            input_summary=input_summary,
             jd_text=job_description,
             match_score=None,
             started_at=None,
@@ -159,6 +180,8 @@ def submit_career_analysis(
         session_id=session_id,
         job_description=job_description,
         resume_text=resume_text,
+        candidate_id=candidate_id,
+        resume_id=resume_id,
     )
 
     return {
@@ -175,6 +198,8 @@ def execute_career_analysis_workflow(
     session_id: str,
     job_description: str,
     resume_text: str,
+    candidate_id: str,
+    resume_id: str,
 ):
     agent_run = get_agent_run_by_workflow_id(workflow_id=workflow_id)
     if agent_run and agent_run.status == WorkflowStatus.CANCELLED:
@@ -213,6 +238,8 @@ def execute_career_analysis_workflow(
         job_description=job_description,
         resume_text=resume_text,
         available_tools=available_tools,
+        candidate_id=candidate_id,
+        resume_id=resume_id,
     )
 
     # 如果状态来自checkpoint且当前节点是create_confirmation，则直接返回状态，不执行workflow

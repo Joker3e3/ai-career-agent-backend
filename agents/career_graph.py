@@ -64,6 +64,8 @@ confirmation_service = ConfirmationService()
 # ============================================================
 class CareerAgentState(TypedDict, total=False):
     user_id: str
+    candidate_id: str
+    resume_id: str
     session_id: str
     job_description: str
     resume_text: str
@@ -132,6 +134,8 @@ def retrieve_resume_evidence(state: CareerAgentState):
             query=final_query,
             workflow_id=state["workflow_id"],
             step_id=state.get("_current_step_id"),
+            candidate_id=state.get("candidate_id"),
+            resume_id=state.get("resume_id"),
         )
 
         for evidence in evidence_list:
@@ -246,6 +250,8 @@ def execute_react_action(state: CareerAgentState):
         query=final_query,
         workflow_id=state["workflow_id"],
         step_id=state.get("_current_step_id"),
+        candidate_id=state.get("candidate_id"),
+        resume_id=state.get("resume_id"),
     )
 
     retry_count = state.get("retry_count", 0) + 1
@@ -989,12 +995,12 @@ def build_career_graph():
     graph.add_edge("execute_react_action", "reflect_evidence")
 
     graph.add_edge("extract_resume_profile", "match_job")
-    graph.add_conditional_edges("match_job", route_by_score)
-    graph.add_edge("generate_learning_plan", "generate_cover_letter")
-    graph.add_edge("generate_interview_tips", "generate_cover_letter")
-    graph.add_edge("generate_cover_letter", "generate_report")
+    # graph.add_conditional_edges("match_job", route_by_score)
+    # graph.add_edge("generate_learning_plan", "generate_cover_letter")
+    # graph.add_edge("generate_interview_tips", "generate_cover_letter")
+    # graph.add_edge("generate_cover_letter", "generate_report")
 
-    # graph.add_edge("match_job", "generate_report")
+    graph.add_edge("match_job", "generate_report")
     graph.add_edge("generate_report", "save_memory")
     graph.add_edge("save_memory", "create_confirmation")
     graph.add_edge("create_confirmation", END)

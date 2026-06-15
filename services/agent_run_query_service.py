@@ -1,4 +1,5 @@
 import logging
+import json
 
 from fastapi import HTTPException
 
@@ -31,6 +32,22 @@ def get_agent_run_detail(workflow_id: str):
     confirmation = get_latest_confirmation_by_workflow_id(
         workflow_id=workflow_id,
     )
+    input_summary = agent_run.input_summary
+    candidate_id = ""
+    resume_id = ""
+
+    try:
+        if input_summary:
+            input_summary_data = json.loads(input_summary)
+
+            if isinstance(input_summary_data, dict):
+                candidate_id = input_summary_data.get("candidate_id", "")
+                resume_id = input_summary_data.get("resume_id", "")
+
+    except json.JSONDecodeError:
+        # 兼容旧数据：以前 input_summary 可能只是普通 JD 文本，不是 JSON
+        candidate_id = ""
+        resume_id = ""
 
     return {
         "workflow_id": agent_run.workflow_id,
@@ -39,6 +56,8 @@ def get_agent_run_detail(workflow_id: str):
         "status": agent_run.status,
         "jd_text": agent_run.jd_text,
         "input_summary": agent_run.input_summary,
+        "candidate_id": candidate_id,
+        "resume_id": resume_id,
         "match_score": agent_run.match_score,
         "final_report": agent_run.final_report,
         "error_message": agent_run.error_message,
@@ -72,6 +91,7 @@ def get_user_agent_runs(
             "workflow_id": run.workflow_id,
             "status": run.status,
             "input_summary": run.input_summary,
+            "jd_text": run.jd_text,
             "created_at": run.created_at,
             "updated_at": run.updated_at,
         }

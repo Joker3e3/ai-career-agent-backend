@@ -41,6 +41,8 @@ app.include_router(career_agent_router)
 class CareerAnalyzeRequest(BaseModel):
     session_id: str
     user_id: str
+    candidate_id: str
+    resume_id: str
     job_description: str
     resume_text: str
 
@@ -51,6 +53,8 @@ def analyze_career(request: CareerAnalyzeRequest):
     submit_result = submit_career_analysis(
         user_id=request.user_id,
         session_id=request.session_id,
+        candidate_id=request.candidate_id,
+        resume_id=request.resume_id,
         job_description=request.job_description,
         resume_text=request.resume_text,
     )

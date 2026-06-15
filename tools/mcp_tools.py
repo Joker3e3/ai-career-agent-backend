@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 def retrieve_evidence_from_mcp_rag(
     user_id: str,
     query: str,
+    candidate_id: str,
+    resume_id: str,
     workflow_id: str | None = None,
     step_id: int | None = None,
 ) -> list[dict]:
@@ -23,6 +25,8 @@ def retrieve_evidence_from_mcp_rag(
         call_mcp_resume_rag_retriever(
             user_id=user_id,
             query=query,
+            candidate_id=candidate_id,
+            resume_id=resume_id,
         )
     )
 
@@ -30,6 +34,8 @@ def retrieve_evidence_from_mcp_rag(
 async def call_mcp_resume_rag_retriever(
     user_id: str,
     query: str,
+    candidate_id: str,
+    resume_id: str,
 ) -> list[dict]:
     # 告诉 MCP Client：
     # 如何启动 MCP Server
@@ -66,6 +72,8 @@ async def call_mcp_resume_rag_retriever(
                 arguments={
                     "user_id": user_id,
                     "query": query,
+                    "candidate_id": candidate_id,
+                    "resume_id": resume_id,
                 },
             )
 

@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 def resume_rag_retriever(
     user_id: str,
     query: str,
+    candidate_id: str,
+    resume_id: str
 ) -> list[dict]:
     """
     从候选人简历 RAG 知识库中检索与岗位能力维度相关的证据。
@@ -20,6 +22,8 @@ def resume_rag_retriever(
     return mcp_retrieve_evidence_from_rag(
         user_id=user_id,
         query=query,
+        candidate_id=candidate_id,
+        resume_id=resume_id
     )
 
 

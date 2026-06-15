@@ -7,6 +7,8 @@ from services.career_analysis_service import execute_career_analysis_workflow
 def execute_career_analysis_task(
     workflow_id: str,
     user_id: str,
+    candidate_id: str,
+    resume_id: str,
     session_id: str,
     job_description: str,
     resume_text: str,
@@ -17,4 +19,6 @@ def execute_career_analysis_task(
         session_id=session_id,
         job_description=job_description,
         resume_text=resume_text,
+        candidate_id=candidate_id,
+        resume_id=resume_id,
     )
